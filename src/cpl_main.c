@@ -1,28 +1,177 @@
 #include "../cplibrary/cpl.h"
+#include "../cpstd/cprng.h"
+#include <stdio.h>
+
+typedef struct {
+    vec2f p;
+    vec2f s;
+    u32 score;
+} player;
+
+typedef struct {
+    vec2f p;
+    f32 r;
+    vec2f dir;
+} ball;
+
+void reset_ball(ball *pong, f32 *speed, f32 start_speed);
+void update(player *p1, player *p2, ball *pong, f32 player_width,
+            f32 player_height, f32 off, f32 *ball_speed, f32 ball_speed_start);
+void render(player p1, player p2, ball pong, font *font);
 
 int main() {
     cpl_init_window(800, 600, "Hello CPL");
     cpl_enable_vsync(false);
 
+    cprng_rand_seed();
+
+    f32 off = 10.0f;
+
+    f32 player_width = 15.0f;
+    f32 player_height = 150.0f;
+
+    player p1 = {
+        .p = {off, (cpl_get_screen_height() / 2.0f) - (player_height / 2.0f)},
+        .s = {player_width, player_height},
+        .score = 0};
+    player p2 = {
+        .p = {cpl_get_screen_width() - player_width - off,
+              (cpl_get_screen_height() / 2.0f) - (player_height / 2.0f)},
+        .s = {player_width, player_height},
+        .score = 0};
+    ball pong = {
+        .p = {cpl_get_screen_width() / 2.0f, cpl_get_screen_height() / 2.0f},
+        .r = 20.0f,
+        .dir = {cprng_rand() % 2 == 0 ? -1.0f : 1.0f,
+                cprng_rand() % 2 == 0 ? -1.0f : 1.0f}};
+
+    f32 last_reset_time = 0.0f;
+
+    font default_font;
+    cpl_create_font(&default_font, "fonts/default.ttf", "default", NEAREST);
+
+    f32 ball_speed_start = 250.0f;
+    f32 ball_speed = ball_speed_start;
+
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     while (!cpl_window_should_close()) {
         cpl_update();
 
-        cpl_clear_background(&BLACK);
+        update(&p1, &p2, &pong, player_width, player_height, off, &ball_speed,
+               ball_speed_start);
 
-        cpl_begin_draw(CPL_SHAPE_2D_UNLIT, false);
-
-        cpl_draw_rect(&(vec2f){0.0f, 0.0f}, &(vec2f){100.0f, 100.0f}, &RED, 0.0f);
-
-        cpl_draw_triangle(&(vec2f){100.0f, 100.0f}, &(vec2f){100.0f, 100.0f},
-                          &GREEN, cpl_get_time() * 360);
-
-        cpl_draw_line(&(vec2f){0.0f, 0.0f}, &(vec2f){300.0f, 300.0f}, 2.0f,
-                      &BLUE);
-
-        cpl_draw_circle(&(vec2f){300.0f, 300.0f}, 100.0f, &WHITE);
-
-        cpl_end_frame();
+        render(p1, p2, pong, &default_font);
     }
     cpl_close_window();
+}
+
+void update(player *p1, player *p2, ball *pong, f32 player_width,
+            f32 player_height, f32 off, f32 *ball_speed, f32 ball_speed_start) {
+    p2->p.x = cpl_get_screen_width() - player_width - off;
+
+    f32 speed = 1000.0f;
+    if (cpl_is_key_down(CPL_KEY_W)) {
+        p1->p.y -= speed * cpl_get_dt();
+    }
+    if (cpl_is_key_down(CPL_KEY_S)) {
+        p1->p.y += speed * cpl_get_dt();
+    }
+    if (cpl_is_key_down(CPL_KEY_H)) {
+        p2->p.y -= speed * cpl_get_dt();
+    }
+    if (cpl_is_key_down(CPL_KEY_N)) {
+        p2->p.y += speed * cpl_get_dt();
+    }
+
+    p1->p.y = CPM_CLAMP(p1->p.y, 0, cpl_get_screen_height() - player_height);
+    p2->p.y = CPM_CLAMP(p2->p.y, 0, cpl_get_screen_height() - player_height);
+
+    f32 ball_acceleration = 10.0f;
+    *ball_speed += ball_acceleration * cpl_get_dt();
+
+    pong->p = vec2f_add(&pong->p,
+                        &(vec2f){pong->dir.x * (*ball_speed) * cpl_get_dt(),
+                                 pong->dir.y * (*ball_speed) * cpl_get_dt()});
+
+    if (pong->p.y - pong->r <= 0.0f) {
+        pong->p.y = pong->r;
+        pong->dir.y *= -1;
+    } else if (pong->p.y + pong->r >= cpl_get_screen_height()) {
+        pong->p.y = cpl_get_screen_height() - pong->r;
+        pong->dir.y *= -1;
+    }
+
+    circle_collider ball_collider = {.pos = pong->p, .radius = pong->r};
+    rect_collider p1_collider = {.pos = p1->p, .size = p1->s};
+    rect_collider p2_collider = {.pos = p2->p, .size = p2->p};
+
+    if (cpl_check_collision_circle_rect(&ball_collider, &p1_collider)) {
+        pong->p.x = p1->p.x + p1->s.x + pong->r;
+        pong->dir.x *= -1;
+    } else if (cpl_check_collision_circle_rect(&ball_collider, &p2_collider)) {
+        pong->p.x = p2->p.x - pong->r;
+        pong->dir.x *= -1;
+    }
+
+    if (pong->p.x <= 0.0f) {
+        p2->score++;
+        reset_ball(pong, ball_speed, ball_speed_start);
+    } else if (pong->p.x >= cpl_get_screen_width()) {
+        p1->score++;
+        reset_ball(pong, ball_speed, ball_speed_start);
+    }
+}
+
+void render(player p1, player p2, ball pong, font *font) {
+    cpl_clear_background(&BLACK);
+
+    cpl_begin_draw(CPL_SHAPE_2D_UNLIT, false);
+
+    cpl_draw_line(
+        &(vec2f){cpl_get_screen_width() / 2.0f, 0.0f},
+        &(vec2f){cpl_get_screen_width() / 2.0f, cpl_get_screen_height()}, 3.0f,
+        &WHITE);
+
+    cpl_draw_rect(&p1.p, &p1.s, &BLUE, 0.0f);
+    cpl_draw_rect(&p2.p, &p2.s, &RED, 0.0f);
+
+    cpl_draw_circle(&pong.p, pong.r, &WHITE);
+
+    cpl_begin_draw(CPL_TEXT, false);
+
+    char *fps = malloc(15);
+    snprintf(fps, 15, "FPS: %d", cpl_get_fps());
+    cpl_draw_text(font, fps, &(vec2f){10.0f, 10.0f}, 0.6f, &WHITE);
+
+    f32 score_font_size = 1.0f;
+
+    char *p1_score = malloc(10);
+    snprintf(p1_score, 10, "%d", p1.score);
+    vec2f p1_score_text_size =
+        cpl_get_text_size(font, p1_score, score_font_size);
+    cpl_draw_text(
+        font, p1_score,
+        &(vec2f){(cpl_get_screen_width() * 0.25f) - p1_score_text_size.x,
+                 cpl_get_screen_height() - p1_score_text_size.y - 10.0f},
+        score_font_size, &WHITE);
+
+    char *p2_score = malloc(10);
+    snprintf(p2_score, 10, "%d", p2.score);
+    vec2f p2_score_text_size =
+        cpl_get_text_size(font, p2_score, score_font_size);
+    cpl_draw_text(
+        font, p2_score,
+        &(vec2f){(cpl_get_screen_width() * 0.75f) - p2_score_text_size.x,
+                 cpl_get_screen_height() - p2_score_text_size.y - 10.0f},
+        score_font_size, &WHITE);
+
+    cpl_end_frame();
+}
+
+void reset_ball(ball *pong, f32 *speed, f32 start_speed) {
+    pong->p.x = cpl_get_screen_width() / 2.0f;
+    pong->p.y = cpl_get_screen_height() / 2.0f;
+    pong->dir.x = cprng_rand() % 2 == 0 ? -1.0f : 1.0f;
+    pong->dir.y = cprng_rand() % 2 == 0 ? -1.0f : 1.0f;
+    *speed = start_speed;
 }

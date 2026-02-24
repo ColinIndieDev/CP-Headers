@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ctype.h>
 #include <glad/glad.h>
 
 #include <GLFW/glfw3.h>
@@ -7,9 +8,144 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+#include <ft2build.h>
+#include FT_FREETYPE_H
 
 #include "../cpstd/cpbase.h"
 #include "../cpstd/cpmath.h"
+
+typedef enum { LINEAR, NEAREST } texture_filtering;
+
+// {{{ Key Inputs
+
+#define CPL_KEY_SPACE 32
+#define CPL_KEY_APOSTROPHE 39
+#define CPL_KEY_COMMA 44
+#define CPL_KEY_MINUS 45
+#define CPL_KEY_PERIOD 46
+#define CPL_KEY_SLASH 47
+#define CPL_KEY_0 48
+#define CPL_KEY_1 49
+#define CPL_KEY_2 50
+#define CPL_KEY_3 51
+#define CPL_KEY_4 52
+#define CPL_KEY_5 53
+#define CPL_KEY_6 54
+#define CPL_KEY_7 55
+#define CPL_KEY_8 56
+#define CPL_KEY_9 57
+#define CPL_KEY_SEMICOLON 59
+#define CPL_KEY_EQUAL 61
+#define CPL_KEY_A 65
+#define CPL_KEY_B 66
+#define CPL_KEY_C 67
+#define CPL_KEY_D 68
+#define CPL_KEY_E 69
+#define CPL_KEY_F 70
+#define CPL_KEY_G 71
+#define CPL_KEY_H 72
+#define CPL_KEY_I 73
+#define CPL_KEY_J 74
+#define CPL_KEY_K 75
+#define CPL_KEY_L 76
+#define CPL_KEY_M 77
+#define CPL_KEY_N 78
+#define CPL_KEY_O 79
+#define CPL_KEY_P 80
+#define CPL_KEY_Q 81
+#define CPL_KEY_R 82
+#define CPL_KEY_S 83
+#define CPL_KEY_T 84
+#define CPL_KEY_U 85
+#define CPL_KEY_V 86
+#define CPL_KEY_W 87
+#define CPL_KEY_X 88
+#define CPL_KEY_Y 89
+#define CPL_KEY_Z 90
+#define CPL_KEY_LEFT_BRACKET 91
+#define CPL_KEY_BACKSLASH 92
+#define CPL_KEY_RIGHT_BRACKET 93
+#define CPL_KEY_GRAVE_ACCENT 96
+#define CPL_KEY_WORLD_1 161
+#define CPL_KEY_WORLD_2 162
+#define CPL_KEY_ESCAPE 256
+#define CPL_KEY_ENTER 257
+#define CPL_KEY_TAB 258
+#define CPL_KEY_BACKSPACE 259
+#define CPL_KEY_INSERT 260
+#define CPL_KEY_DELETE 261
+#define CPL_KEY_RIGHT 262
+#define CPL_KEY_LEFT 263
+#define CPL_KEY_DOWN 264
+#define CPL_KEY_UP 265
+#define CPL_KEY_PAGE_UP 266
+#define CPL_KEY_PAGE_DOWN 267
+#define CPL_KEY_HOME 268
+#define CPL_KEY_END 269
+#define CPL_KEY_CAPS_LOCK 280
+#define CPL_KEY_SCROLL_LOCK 281
+#define CPL_KEY_NUM_LOCK 282
+#define CPL_KEY_PRINT_SCREEN 283
+#define CPL_KEY_PAUSE 284
+#define CPL_KEY_F1 290
+#define CPL_KEY_F2 291
+#define CPL_KEY_F3 292
+#define CPL_KEY_F4 293
+#define CPL_KEY_F5 294
+#define CPL_KEY_F6 295
+#define CPL_KEY_F7 296
+#define CPL_KEY_F8 297
+#define CPL_KEY_F9 298
+#define CPL_KEY_F10 299
+#define CPL_KEY_F11 300
+#define CPL_KEY_F12 301
+#define CPL_KEY_F13 302
+#define CPL_KEY_F14 303
+#define CPL_KEY_F15 304
+#define CPL_KEY_F16 305
+#define CPL_KEY_F17 306
+#define CPL_KEY_F18 307
+#define CPL_KEY_F19 308
+#define CPL_KEY_F20 309
+#define CPL_KEY_F21 310
+#define CPL_KEY_F22 311
+#define CPL_KEY_F23 312
+#define CPL_KEY_F24 313
+#define CPL_KEY_F25 314
+#define CPL_KEY_KP_0 320
+#define CPL_KEY_KP_1 321
+#define CPL_KEY_KP_2 322
+#define CPL_KEY_KP_3 323
+#define CPL_KEY_KP_4 324
+#define CPL_KEY_KP_5 325
+#define CPL_KEY_KP_6 326
+#define CPL_KEY_KP_7 327
+#define CPL_KEY_KP_8 328
+#define CPL_KEY_KP_9 329
+#define CPL_KEY_KP_DECIMAL 330
+#define CPL_KEY_KP_DIVIDE 331
+#define CPL_KEY_KP_MULTIPLY 332
+#define CPL_KEY_KP_SUBTRACT 333
+#define CPL_KEY_KP_ADD 334
+#define CPL_KEY_KP_ENTER 335
+#define CPL_KEY_KP_EQUAL 336
+#define CPL_KEY_LEFT_SHIFT 340
+#define CPL_KEY_LEFT_CONTROL 341
+#define CPL_KEY_LEFT_ALT 342
+#define CPL_KEY_LEFT_SUPER 343
+#define CPL_KEY_RIGHT_SHIFT 344
+#define CPL_KEY_RIGHT_CONTROL 345
+#define CPL_KEY_RIGHT_ALT 346
+#define CPL_KEY_RIGHT_SUPER 347
+#define CPL_KEY_MENU 348
+#define CPL_KEY_LAST GLFW_KEY_MENU
+
+// }}}
 
 // {{{ Colors
 
@@ -431,6 +567,155 @@ void cpl_draw_line_raw(shader *s, line *l) {
 
 // }}}
 
+// {{{ Text
+
+typedef struct {
+    u32 id;
+    vec2f size;
+    vec2f bearing;
+    u32 advance;
+} letter;
+
+VEC_DEF(letter, vec_letters)
+
+typedef struct {
+    u32 vao, vbo;
+    char *name;
+    vec_letters letters;
+} font;
+
+void cpl_create_font(font *f, char *path, char *name,
+                     texture_filtering filter) {
+    FT_Library ft;
+    if (FT_Init_FreeType(&ft)) {
+        cpl_log(LOG_ERR, "Could not init FreeType Library");
+        exit(-1);
+    }
+
+    if (access(path, F_OK) == -1) {
+        char *message = malloc(100);
+        snprintf(message, 100, "Failed to load %s", name);
+        cpl_log(LOG_ERR, message);
+        exit(-1);
+    }
+
+    FT_Face face;
+    if (FT_New_Face(ft, path, 0, &face)) {
+        cpl_log(LOG_ERR, "Failed to load font");
+        exit(-1);
+    }
+    FT_Set_Pixel_Sizes(face, 0, 48);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+    vec_letters_reserve(&f->letters, 128);
+    for (u8 c = 0; c < 128; c++) {
+        if (FT_Load_Char(face, c, FT_LOAD_RENDER)) {
+            cpl_log(LOG_ERR, "Failed to load Glyph");
+            continue;
+        }
+
+        u32 tex = 0;
+        glGenTextures(1, &tex);
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8,
+                     (GLsizei)face->glyph->bitmap.width,
+                     (GLsizei)face->glyph->bitmap.rows, 0, GL_RED,
+                     GL_UNSIGNED_BYTE, face->glyph->bitmap.buffer);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                        filter == LINEAR ? GL_LINEAR : GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
+                        filter == LINEAR ? GL_LINEAR : GL_NEAREST);
+
+        letter character = {.id = tex,
+                            .size = {(f32)face->glyph->bitmap.width,
+                                     (f32)face->glyph->bitmap.rows},
+                            .bearing = {(f32)face->glyph->bitmap_left,
+                                        (f32)face->glyph->bitmap_top},
+                            .advance = face->glyph->advance.x};
+        vec_letters_push_back(&f->letters, character);
+    }
+    f->name = name;
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+
+    glGenVertexArrays(1, &f->vao);
+    glGenBuffers(1, &f->vbo);
+    glBindVertexArray(f->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, f->vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(f32) * 6 * 4, NULL, GL_DYNAMIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(f32), NULL);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    FT_Done_Face(face);
+    FT_Done_FreeType(ft);
+}
+
+void cpl_draw_text_raw(shader *s, font *f, char *text, vec2f *pos, f32 scale,
+                       vec4f *color) {
+    cpl_shader_set_vec3f(s, "text_color",
+                         &(vec3f){color->r, color->g, color->b});
+    glActiveTexture(GL_TEXTURE0);
+    glBindVertexArray(f->vao);
+
+    for (u32 i = 0; i < strlen(text); i++) {
+        letter *l = vec_letters_at(&f->letters, text[i]);
+
+        f32 x_pos = pos->x + (l->bearing.x * scale);
+        f32 y_pos =
+            pos->y +
+            ((vec_letters_at(&f->letters, 'H')->bearing.y - l->bearing.y) *
+             scale);
+        f32 width = l->size.x * scale;
+        f32 height = l->size.y * scale;
+
+        f32 vertices[6][4] = {{x_pos, y_pos + height, 0.0f, 1.0f},
+                              {x_pos, y_pos, 0.0f, 0.0f},
+                              {x_pos + width, y_pos, 1.0f, 0.0f},
+
+                              {x_pos, y_pos + height, 0.0f, 1.0f},
+                              {x_pos + width, y_pos, 1.0f, 0.0f},
+                              {x_pos + width, y_pos + height, 1.0f, 1.0f}};
+
+        glBindTexture(GL_TEXTURE_2D, l->id);
+        glBindBuffer(GL_ARRAY_BUFFER, f->vbo);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        pos->x += ((f32)(l->advance >> 6)) * scale;
+    }
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+vec2f cpl_get_text_size(font *f, char *text, f32 scale) {
+    f32 width = 0.0f;
+    f32 height = 0.0f;
+    f32 max_above_base = 0.0f;
+    f32 max_below_base = 0.0f;
+
+    for (u32 i = 0; i < strlen(text); i++) {
+
+        letter *l = vec_letters_at(&f->letters, text[i]);
+        f32 h = l->size.y * scale;
+        max_above_base = CPM_MAX(max_above_base, l->bearing.y * scale);
+        max_below_base = CPM_MAX(
+            max_below_base, (h - (l->bearing.y * scale)));
+        width += (f32)(l->advance >> 6) * scale;
+    }
+    height = max_above_base + max_below_base;
+    return (vec2f){width, height};
+}
+
+// }}}
+
 // {{{ General
 
 f32 cpl_screen_width = 0.0f;
@@ -440,7 +725,11 @@ GLFWwindow *cpl_window = NULL;
 
 mat4f cpl_projection_2D;
 
-typedef enum { CPL_SHAPE_2D_UNLIT, CPL_DRAW_MODES_COUNT } cpl_draw_mode;
+typedef enum {
+    CPL_SHAPE_2D_UNLIT,
+    CPL_TEXT,
+    CPL_DRAW_MODES_COUNT
+} cpl_draw_mode;
 
 cpl_draw_mode cpl_cur_draw_mode;
 
@@ -480,41 +769,60 @@ mat4f *cpl_cam_2D_get_view_mat(cam_2D *cam) {
 
 // {{{ Collisions
 
-b8 cpl_check_collision_rects(rect *a, rect *b) {
-    b8 collision_x = a->pos.x + a->size.x >= b->pos.x &&
-                    b->pos.x + b->size.x >= a->pos.x;
-    b8 collision_y = a->pos.y + a->size.y >= b->pos.y &&
-                          b->pos.y + b->size.y >= a->pos.y;
+typedef struct {
+    vec2f pos;
+    vec2f size;
+} rect_collider;
+
+typedef struct {
+    vec2f pos;
+    vec2f size;
+} triangle_collider;
+
+typedef struct {
+    vec2f pos;
+    f32 radius;
+} circle_collider;
+
+b8 cpl_check_collision_rects(rect_collider *a, rect_collider *b) {
+    b8 collision_x =
+        a->pos.x + a->size.x >= b->pos.x && b->pos.x + b->size.x >= a->pos.x;
+    b8 collision_y =
+        a->pos.y + a->size.y >= b->pos.y && b->pos.y + b->size.y >= a->pos.y;
 
     return collision_x && collision_y;
 }
-b8 cpl_check_collision_circle_rect(circle *a, rect *b) {
+
+b8 cpl_check_collision_circle_rect(circle_collider *a, rect_collider *b) {
     vec2f circleCenter = a->pos;
-    vec2f rectCenter = vec2f_add(&b->pos, &(vec2f){b->size.x * 0.5f, b->size.y * 0.5f});
+    vec2f rectCenter =
+        vec2f_add(&b->pos, &(vec2f){b->size.x * 0.5f, b->size.y * 0.5f});
     vec2f halfExtents = (vec2f){b->size.x * 0.5f, b->size.y * 0.5f};
     vec2f difference = vec2f_sub(&circleCenter, &rectCenter);
-    vec2f clamped = glm::clamp(difference, -halfExtents, halfExtents);
-    vec2f closest = rectCenter + clamped;
-    vec2f delta = closest - circleCenter;
+    vec2f clamped = vec2f_clamp(
+        &difference, &(vec2f){-halfExtents.x, -halfExtents.y}, &halfExtents);
+    vec2f closest = vec2f_add(&rectCenter, &clamped);
+    vec2f delta = vec2f_sub(&closest, &circleCenter);
 
-    return glm::length(delta) <= one.radius;
+    return vec2f_length(&delta) <= a->radius;
 }
-b8 cpl_check_collision_vec2f_rect(const glm::vec2 &one,
-                                  const CPL::Rectangle &two) {
-    return two.pos.x < one.x && one.x < two.pos.x + two.size.x &&
-           two.pos.y < one.y && one.y < two.pos.y + two.size.y;
+
+b8 cpl_check_collision_vec2f_rect(vec2f *a, rect_collider *b) {
+    return b->pos.x < a->x && a->x < b->pos.x + b->size.x && b->pos.y < a->y &&
+           a->y < b->pos.y + b->size.y;
 }
-b8 cpl_check_collision_circles(const CPL::Circle &one, const CPL::Circle &two) {
-    const glm::vec2 dist = one.pos - two.pos;
-    const float distanceSquared = (dist.x * dist.x) + (dist.y * dist.y);
-    const float radiusSum = one.radius + two.radius;
-    return distanceSquared <= radiusSum * radiusSum;
+
+b8 cpl_check_collision_circles(circle_collider *a, circle_collider *b) {
+    vec2f dist = vec2f_sub(&a->pos, &b->pos);
+    f32 distance2 = (dist.x * dist.x) + (dist.y * dist.y);
+    f32 radius_sum = a->radius + b->radius;
+    return distance2 <= radius_sum * radius_sum;
 }
-b8 cpl_check_collision_vec2f_circle(const glm::vec2 &one,
-                                    const CPL::Circle &two) {
-    const glm::vec2 dist = one - two.pos;
-    const float distanceSquared = (dist.x * dist.x) + (dist.y * dist.y);
-    return distanceSquared <= two.radius * two.radius;
+
+b8 cpl_check_collision_vec2f_circle(vec2f *a, circle_collider *b) {
+    vec2f dist = vec2f_sub(a, &b->pos);
+    f32 distance2 = (dist.x * dist.x) + (dist.y * dist.y);
+    return distance2 <= b->radius * b->radius;
 }
 
 // }}}
@@ -532,8 +840,10 @@ void cpl_framebuffer_size_callback(GLFWwindow *window, i32 width, i32 height) {
 shader *cpl_init_shaders() {
     shader *shaders = malloc(sizeof(shader) * CPL_DRAW_MODES_COUNT);
 
-    shaders[0] = *cpl_create_shader("shaders/vert/2D/shape_unlit.vert",
-                                    "shaders/frag/2D/shape_unlit.frag");
+    shaders[CPL_SHAPE_2D_UNLIT] = *cpl_create_shader(
+        "shaders/vert/2D/shape_unlit.vert", "shaders/frag/2D/shape_unlit.frag");
+    shaders[CPL_TEXT] = *cpl_create_shader("shaders/vert/2D/text.vert",
+                                           "shaders/frag/2D/text.frag");
 
     return shaders;
 }
@@ -567,6 +877,10 @@ void cpl_init_window(i32 width, i32 height, char *title) {
                 0.0f, -1.0f, 1.0f);
 
     cpl_shaders = cpl_init_shaders();
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 }
 
 b8 cpl_window_should_close() { return glfwWindowShouldClose(cpl_window); }
@@ -588,17 +902,14 @@ void cpl_clear_background(vec4f *color) {
 void cpl_begin_draw(cpl_draw_mode draw_mode, b8 mode_2D) {
     cpl_cur_draw_mode = draw_mode;
     cpl_use_shader(&cpl_shaders[draw_mode]);
-    if (mode_2D) {
 
-    } else {
-        mat4f view_projection_2D;
-        if (mode_2D) {
-            mat4f_mul(&cpl_projection_2D, cpl_cam_2D_get_view_mat(&cpl_cam_2D),
-                      &view_projection_2D);
-        }
-        cpl_shader_set_mat4f(&cpl_shaders[draw_mode], "projection",
-                             mode_2D ? view_projection_2D : cpl_projection_2D);
+    mat4f view_projection_2D;
+    if (mode_2D) {
+        mat4f_mul(&cpl_projection_2D, cpl_cam_2D_get_view_mat(&cpl_cam_2D),
+                  &view_projection_2D);
     }
+    cpl_shader_set_mat4f(&cpl_shaders[draw_mode], "projection",
+                         mode_2D ? view_projection_2D : cpl_projection_2D);
 }
 
 void cpl_draw_rect(vec2f *pos, vec2f *size, vec4f *color, f32 rot) {
@@ -631,7 +942,20 @@ void cpl_draw_line(vec2f *start, vec2f *end, f32 thickness, vec4f *color) {
     cpl_destroy_line(&l);
 }
 
+void cpl_draw_text(font *font, char *text, vec2f *pos, f32 scale,
+                   vec4f *color) {
+    cpl_draw_text_raw(&cpl_shaders[cpl_cur_draw_mode], font, text, pos, scale,
+                      color);
+}
+
 // }}}
+
+b8 cpl_is_key_down(i32 key) {
+    if (glfwGetKey(cpl_window, key) == GLFW_PRESS) {
+        return true;
+    }
+    return false;
+}
 
 void cpl_calc_fps() {
     f32 cur_time = (f32)glfwGetTime();
@@ -653,6 +977,10 @@ void cpl_calc_dt() {
 f32 cpl_get_dt() { return cpl_dt; }
 f32 cpl_get_time() { return (f32)glfwGetTime(); }
 f32 cpl_get_time_scale() { return cpl_time_scale; }
+
+f32 cpl_get_screen_width() { return cpl_screen_width; }
+f32 cpl_get_screen_height() { return cpl_screen_height; }
+
 void cpl_set_time_scale(f32 scale) { cpl_time_scale = scale; }
 void cpl_enable_vsync(b8 enabled) { glfwSwapInterval(enabled); }
 

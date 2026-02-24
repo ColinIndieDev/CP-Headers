@@ -47,14 +47,21 @@ set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(glfw)
 
-# CGLM
+# STB
 FetchContent_Declare(
-    cglm
-    GIT_REPOSITORY https://github.com/recp/cglm.git
-    GIT_TAG master
+        stb
+        GIT_REPOSITORY https://github.com/nothings/stb.git
+        GIT_TAG master
 )
+FetchContent_MakeAvailable(stb)
 
-FetchContent_MakeAvailable(cglm)
+# Freetype
+FetchContent_Declare(
+        freetype
+        GIT_REPOSITORY https://github.com/freetype/freetype.git
+        GIT_TAG VER-2-14-1
+)
+FetchContent_MakeAvailable(freetype)
 
 # GLAD
 add_subdirectory(external/glad)
@@ -79,10 +86,8 @@ add_executable(Example
     ${SOURCE_FILES}
 )
 
-# math.h
-# target_link_libraries(Example m)
-
-# OpenMP
+# OpenMP, GLFW, GLAD, STB & FT
+target_include_directories(Example PRIVATE ${stb_SOURCE_DIR})
 find_package(OpenMP REQUIRED)
-target_link_libraries(Example PRIVATE OpenMP::OpenMP_C glfw glad cglm_headers)
+target_link_libraries(Example PRIVATE OpenMP::OpenMP_C glfw glad freetype)
 target_compile_options(Example PRIVATE -mavx2 -mfma)

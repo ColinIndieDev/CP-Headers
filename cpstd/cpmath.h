@@ -304,6 +304,12 @@ f32 vec2f_dist2(vec2f *v1, vec2f *v2) {
 
 f32 vec2f_dot(vec2f *a, vec2f *b) { return (a->x * b->x) + (a->y * b->y); }
 
+f32 vec2f_length(vec2f *a) { return cpm_sqrt((a->x * a->x) + (a->y * a->y)); }
+
+vec2f vec2f_clamp(vec2f *v, vec2f *n, vec2f *m) {
+    return (vec2f){CPM_CLAMP(v->x, n->x, m->x), CPM_CLAMP(v->y, n->y, m->y)};
+}
+
 typedef struct {
     f32 data[4][4];
 } mat4f;
