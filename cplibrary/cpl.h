@@ -1,14 +1,18 @@
 #pragma once
 
-#include <ctype.h>
+#define _GNU_SOURCE
+
 #include <glad/glad.h>
 
 #include <GLFW/glfw3.h>
 
+#include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#include <pthread.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -16,10 +20,11 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
+#include "../cpstd/cparena.h"
 #include "../cpstd/cpbase.h"
 #include "../cpstd/cpmath.h"
 
-typedef enum { LINEAR, NEAREST } texture_filtering;
+typedef enum { CPL_FILTER_LINEAR, CPL_FILTER_NEAREST } texture_filtering;
 
 // {{{ Key Inputs
 
@@ -177,6 +182,46 @@ void cpl_log(log_level level, char *message) {
 
 // }}}
 
+// {{{ Profiler
+
+u32 cpl_get_heap_size() {
+    struct mallinfo2 mi = mallinfo2();
+    return mi.arena;
+}
+
+u32 cpl_get_heap_used() {
+    struct mallinfo2 mi = mallinfo2();
+    return mi.uordblks;
+}
+
+u32 cpl_get_heap_free() {
+    struct mallinfo2 mi = mallinfo2();
+    return mi.fordblks;
+}
+
+u32 cpl_get_stack_size() {
+    pthread_attr_t attr;
+    pthread_getattr_np(pthread_self(), &attr);
+    size_t size = 0;
+    pthread_attr_getstacksize(&attr, &size);
+    pthread_attr_destroy(&attr);
+    return size;
+}
+
+u32 cpl_get_stack_used() {
+    pthread_attr_t attr;
+    pthread_getattr_np(pthread_self(), &attr);
+    void *base = NULL;
+    size_t size = 0;
+    pthread_attr_getstack(&attr, &base, &size);
+    pthread_attr_destroy(&attr);
+    char marker;
+    void *cur = &marker;
+    return (u32)(base + size - cur);
+}
+
+// }}}
+
 // {{{ Shader
 
 typedef struct {
@@ -235,9 +280,7 @@ char *cpl_read_shader_file(char *path) {
     return buffer;
 }
 
-shader *cpl_create_shader(char *vert_path, char *frag_path) {
-    shader *s = malloc(sizeof(shader));
-
+void cpl_create_shader(shader *s, char *vert_path, char *frag_path) {
     char *vert_code = cpl_read_shader_file(vert_path);
     char *frag_code = cpl_read_shader_file(frag_path);
 
@@ -257,10 +300,10 @@ shader *cpl_create_shader(char *vert_path, char *frag_path) {
     glLinkProgram(s->id);
     cpl_check_shader_compile_errors(s->id, "PROGRAM");
 
+    free(vert_code);
+    free(frag_code);
     glDeleteShader(vert);
     glDeleteShader(frag);
-
-    return s;
 }
 
 void cpl_use_shader(shader *s) { glUseProgram(s->id); }
@@ -483,6 +526,7 @@ void cpl_create_circle(circle *c, vec2f *pos, f32 radius, vec4f *color) {
     glEnableVertexAttribArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
+    free(vertices);
 }
 
 void cpl_destroy_circle(circle *c) {
@@ -625,9 +669,9 @@ void cpl_create_font(font *f, char *path, char *name,
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-                        filter == LINEAR ? GL_LINEAR : GL_NEAREST);
+                        filter == CPL_FILTER_LINEAR ? GL_LINEAR : GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
-                        filter == LINEAR ? GL_LINEAR : GL_NEAREST);
+                        filter == CPL_FILTER_LINEAR ? GL_LINEAR : GL_NEAREST);
 
         letter character = {.id = tex,
                             .size = {(f32)face->glyph->bitmap.width,
@@ -654,6 +698,21 @@ void cpl_create_font(font *f, char *path, char *name,
 
     FT_Done_Face(face);
     FT_Done_FreeType(ft);
+}
+
+void cpl_delete_font(font *f) {
+    if (f->vao != 0 && glIsVertexArray(f->vao)) {
+        glDeleteVertexArrays(1, &f->vao);
+        f->vao = 0;
+    }
+    if (f->vbo != 0 && glIsBuffer(f->vbo)) {
+        glDeleteBuffers(1, &f->vbo);
+        f->vbo = 0;
+    }
+    for (u32 i = 0; i < f->letters.size; i++) {
+        glDeleteTextures(1, &vec_letters_at(&f->letters, i)->id);
+    }
+    vec_letters_destroy(&f->letters);
 }
 
 void cpl_draw_text_raw(shader *s, font *f, char *text, vec2f *pos, f32 scale,
@@ -706,8 +765,7 @@ vec2f cpl_get_text_size(font *f, char *text, f32 scale) {
         letter *l = vec_letters_at(&f->letters, text[i]);
         f32 h = l->size.y * scale;
         max_above_base = CPM_MAX(max_above_base, l->bearing.y * scale);
-        max_below_base = CPM_MAX(
-            max_below_base, (h - (l->bearing.y * scale)));
+        max_below_base = CPM_MAX(max_below_base, (h - (l->bearing.y * scale)));
         width += (f32)(l->advance >> 6) * scale;
     }
     height = max_above_base + max_below_base;
@@ -716,7 +774,145 @@ vec2f cpl_get_text_size(font *f, char *text, f32 scale) {
 
 // }}}
 
+// {{{ Texture & Texture2D
+
+typedef struct {
+    u32 id;
+    vec2f size;
+} texture;
+
+void cpl_load_texture(texture *t, char *path, texture_filtering filter) {
+    glGenTextures(1, &t->id);
+    glBindTexture(GL_TEXTURE_2D, t->id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                    filter == CPL_FILTER_LINEAR ? GL_LINEAR : GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
+                    filter == CPL_FILTER_LINEAR ? GL_LINEAR : GL_NEAREST);
+    stbi_set_flip_vertically_on_load(1);
+    i32 width = 0;
+    i32 height = 0;
+    i32 channels = 0;
+    u8 *data = stbi_load(path, &width, &height, &channels, 0);
+    GLenum format = 0;
+    if (channels == 1) {
+        format = GL_RED;
+    } else if (channels == 3) {
+        format = GL_RGB;
+    } else if (channels == 4) {
+        format = GL_RGBA;
+    }
+    if (data) {
+        t->size.x = (f32)width;
+        t->size.y = (f32)height;
+        glTexImage2D(GL_TEXTURE_2D, 0, (i32)format, (i32)t->size.x,
+                     (i32)t->size.y, 0, format, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    } else {
+        cpl_log(LOG_ERR, "Failed to load texture\n");
+    }
+    stbi_image_free(data);
+}
+
+void cpl_unload_texture(texture *t) {
+    if (t->id != 0) {
+        glDeleteTextures(1, &t->id);
+    }
+}
+
+typedef struct {
+    vec2f pos;
+    vec2f size;
+    f32 rot;
+    vec4f color;
+    texture *tex;
+
+    u32 vbo, vao, ebo;
+} texture2D;
+
+void cpl_create_texture2D(texture2D *t, vec2f *pos, vec2f *size, f32 rot,
+                          vec4f *color, texture *tex) {
+    t->pos = *pos;
+    t->size = *size;
+    t->rot = rot;
+    t->color = *color;
+    t->tex = tex;
+
+    f32 vertices[22] = {
+        size->x, 0.0f,    0.0f, 1.0f, 1.0f, size->x, size->y, 0.0f, 1.0f, 0.0f,
+
+        0.0f,    size->y, 0.0f, 0.0f, 0.0f, 0.0f,    0.0f,    0.0f, 0.0f, 1.0f};
+    u32 indices[6] = {0, 1, 3, 1, 2, 3};
+
+    glGenVertexArrays(1, &t->vao);
+    glGenBuffers(1, &t->vbo);
+    glGenBuffers(1, &t->ebo);
+    glBindVertexArray(t->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, t->vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, t->ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices,
+                 GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(f32),
+                          (void *)NULL);
+    glEnableVertexAttribArray(0);
+
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(f32),
+                          (void *)(3 * sizeof(f32)));
+    glEnableVertexAttribArray(1);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+}
+
+void cpl_destroy_texture2D(texture2D *t) {
+    if (t->vao != 0 && glIsVertexArray(t->vao)) {
+        glDeleteVertexArrays(1, &t->vao);
+        t->vao = 0;
+    }
+    if (t->vbo != 0 && glIsBuffer(t->vbo)) {
+        glDeleteBuffers(1, &t->vbo);
+        t->vbo = 0;
+    }
+    if (t->ebo != 0 && glIsBuffer(t->ebo)) {
+        glDeleteBuffers(1, &t->ebo);
+        t->ebo = 0;
+    }
+    t->tex = NULL;
+}
+
+void cpl_draw_texture2D_raw(shader *s, texture2D *t) {
+    mat4f transform;
+    mat4f_identity(&transform);
+
+    vec3f pos3 = {t->pos.x, t->pos.y, 0.0f};
+    mat4f_translate(&transform, &pos3);
+
+    vec2f center = {t->pos.x + (t->size.x * 0.5f),
+                    t->pos.y + (t->size.y * 0.5f)};
+    mat4f_translate(&transform, &(vec3f){center.x, center.y, 0.0f});
+    mat4f_rotate(&transform, cpm_rad(t->rot), &(vec3f){0.0f, 0.0f, 1.0f});
+    mat4f_translate(&transform, &(vec3f){-center.x, -center.y, 0.0f});
+
+    cpl_shader_set_i32(s, "tex", 0);
+    cpl_shader_set_mat4f(s, "transform", transform);
+    cpl_shader_set_rgba(s, "input_color", &t->color);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, t->tex->id);
+    glBindVertexArray(t->vao);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, NULL);
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+// }}}
+
 // {{{ General
+
+// {{{ Variables
 
 f32 cpl_screen_width = 0.0f;
 f32 cpl_screen_height = 0.0f;
@@ -728,12 +924,13 @@ mat4f cpl_projection_2D;
 typedef enum {
     CPL_SHAPE_2D_UNLIT,
     CPL_TEXT,
+    CPL_TEXTURE_2D_UNLIT,
     CPL_DRAW_MODES_COUNT
 } cpl_draw_mode;
 
 cpl_draw_mode cpl_cur_draw_mode;
 
-shader *cpl_shaders = NULL;
+shader cpl_shaders[CPL_DRAW_MODES_COUNT];
 
 i32 cpl_nb_frames = 0;
 f32 cpl_last_time = 0.0f;
@@ -741,6 +938,10 @@ f32 cpl_last_frame = 0.0f;
 f32 cpl_dt = 0.0f;
 f32 cpl_time_scale = 1.0f;
 i32 cpl_fps = 0;
+
+GLubyte *cpl_renderer;
+GLubyte *cpl_vendor;
+GLubyte *cpl_version;
 
 typedef struct {
     vec2f pos;
@@ -766,6 +967,8 @@ mat4f *cpl_cam_2D_get_view_mat(cam_2D *cam) {
 
     return view;
 }
+
+// }}}
 
 // {{{ Collisions
 
@@ -837,15 +1040,15 @@ void cpl_framebuffer_size_callback(GLFWwindow *window, i32 width, i32 height) {
                 0.0f, -1.0f, 1.0f);
 }
 
-shader *cpl_init_shaders() {
-    shader *shaders = malloc(sizeof(shader) * CPL_DRAW_MODES_COUNT);
-
-    shaders[CPL_SHAPE_2D_UNLIT] = *cpl_create_shader(
-        "shaders/vert/2D/shape_unlit.vert", "shaders/frag/2D/shape_unlit.frag");
-    shaders[CPL_TEXT] = *cpl_create_shader("shaders/vert/2D/text.vert",
-                                           "shaders/frag/2D/text.frag");
-
-    return shaders;
+void cpl_init_shaders() {
+    cpl_create_shader(&cpl_shaders[CPL_SHAPE_2D_UNLIT],
+                      "shaders/vert/2D/shape_unlit.vert",
+                      "shaders/frag/2D/shape_unlit.frag");
+    cpl_create_shader(&cpl_shaders[CPL_TEXT], "shaders/vert/2D/text.vert",
+                      "shaders/frag/2D/text.frag");
+    cpl_create_shader(&cpl_shaders[CPL_TEXTURE_2D_UNLIT],
+                      "shaders/vert/2D/texture.vert",
+                      "shaders/frag/2D/texture.frag");
 }
 void cpl_init_window(i32 width, i32 height, char *title) {
     glfwInit();
@@ -867,7 +1070,7 @@ void cpl_init_window(i32 width, i32 height, char *title) {
     glfwMakeContextCurrent(cpl_window);
     glfwSetFramebufferSizeCallback(cpl_window, cpl_framebuffer_size_callback);
 
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+    if (!gladLoadGLLoader((GLADloadproc)(glfwGetProcAddress))) {
         fprintf(stderr, "[CPL] [ERROR] Failed to initialize GLAD");
         exit(-1);
     }
@@ -876,11 +1079,15 @@ void cpl_init_window(i32 width, i32 height, char *title) {
     mat4f_ortho(&cpl_projection_2D, 0.0f, cpl_screen_width, cpl_screen_height,
                 0.0f, -1.0f, 1.0f);
 
-    cpl_shaders = cpl_init_shaders();
+    cpl_init_shaders();
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+    cpl_renderer = (GLubyte *)glGetString(GL_RENDERER);
+    cpl_vendor = (GLubyte *)glGetString(GL_VENDOR);
+    cpl_version = (GLubyte *)glGetString(GL_VERSION);
 }
 
 b8 cpl_window_should_close() { return glfwWindowShouldClose(cpl_window); }
@@ -948,6 +1155,14 @@ void cpl_draw_text(font *font, char *text, vec2f *pos, f32 scale,
                       color);
 }
 
+void cpl_draw_texture2D(texture *tex, vec2f *pos, vec2f *size, vec4f *color, f32 rot) {
+    texture2D t;
+    cpl_create_texture2D(&t, pos, size,
+                         rot, color, tex);
+    cpl_draw_texture2D_raw(&cpl_shaders[cpl_cur_draw_mode], &t);
+    cpl_destroy_texture2D(&t);
+}
+
 // }}}
 
 b8 cpl_is_key_down(i32 key) {
@@ -956,6 +1171,8 @@ b8 cpl_is_key_down(i32 key) {
     }
     return false;
 }
+
+// {{{ Timing
 
 void cpl_calc_fps() {
     f32 cur_time = (f32)glfwGetTime();
@@ -982,6 +1199,9 @@ f32 cpl_get_screen_width() { return cpl_screen_width; }
 f32 cpl_get_screen_height() { return cpl_screen_height; }
 
 void cpl_set_time_scale(f32 scale) { cpl_time_scale = scale; }
+
+// }}}
+
 void cpl_enable_vsync(b8 enabled) { glfwSwapInterval(enabled); }
 
 void cpl_update() {
@@ -992,6 +1212,51 @@ void cpl_update() {
 void cpl_end_frame() {
     glfwSwapBuffers(cpl_window);
     glfwPollEvents();
+}
+
+void cpl_display_details(font *font) {
+    cpl_begin_draw(CPL_TEXT, false);
+
+    mem_arena *arena = mem_arena_create(KiB(1));
+
+    char *version_str = mem_arena_push(arena, 50, true);
+    snprintf(version_str, 50, "OpenGL version: %s", cpl_version);
+    cpl_draw_text(font, version_str, &(vec2f){10.0f, 10.0f}, 0.5f, &WHITE);
+
+    char *renderer_str = mem_arena_push(arena, 50, true);
+    snprintf(renderer_str, 50, "Renderer: %s", cpl_renderer);
+    cpl_draw_text(font, renderer_str, &(vec2f){10.0f, 40.0f}, 0.5f, &WHITE);
+
+    char *vendor_str = mem_arena_push(arena, 50, true);
+    snprintf(vendor_str, 50, "Vendor: %s", cpl_vendor);
+    cpl_draw_text(font, vendor_str, &(vec2f){10.0f, 70.0f}, 0.5f, &WHITE);
+
+    char *fps = mem_arena_push(arena, 15, true);
+    snprintf(fps, 15, "FPS: %d", cpl_get_fps());
+    cpl_draw_text(font, fps, &(vec2f){10.0f, 100.0f}, 0.5f, &WHITE);
+
+    char *stack_used = mem_arena_push(arena, 50, true);
+    snprintf(stack_used, 50, "Stack used: %.3f / %.3f MB (%f%%)",
+             MB((f32)cpl_get_stack_used()), MB((f32)cpl_get_stack_size()),
+             (f32)cpl_get_stack_used() / (f32)cpl_get_stack_size());
+    cpl_draw_text(font, stack_used, &(vec2f){10.0f, 130.0f}, 0.5f, &WHITE);
+
+    char *heap_total = mem_arena_push(arena, 50, true);
+    snprintf(heap_total, 50, "Heap size: %d MB",
+             (i32)MB((f32)cpl_get_heap_size()));
+    cpl_draw_text(font, heap_total, &(vec2f){10.0f, 160.0f}, 0.5f, &WHITE);
+
+    char *heap_used = mem_arena_push(arena, 50, true);
+    snprintf(heap_used, 50, "Heap used: %d MB",
+             (i32)MB((f32)cpl_get_heap_used()));
+    cpl_draw_text(font, heap_used, &(vec2f){10.0f, 190.0f}, 0.5f, &WHITE);
+
+    char *heap_free = mem_arena_push(arena, 50, true);
+    snprintf(heap_free, 50, "Heap free: %d MB",
+             (i32)MB((f32)cpl_get_heap_free()));
+    cpl_draw_text(font, heap_free, &(vec2f){10.0f, 220.0f}, 0.5f, &WHITE);
+
+    mem_arena_destroy(arena);
 }
 
 // }}}

@@ -86,8 +86,10 @@ add_executable(Example
     ${SOURCE_FILES}
 )
 
-# OpenMP, GLFW, GLAD, STB & FT
+# OpenMP, pthread, GLFW, GLAD, STB & FT
 target_include_directories(Example PRIVATE ${stb_SOURCE_DIR})
 find_package(OpenMP REQUIRED)
-target_link_libraries(Example PRIVATE OpenMP::OpenMP_C glfw glad freetype)
+set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+find_package(Threads REQUIRED)
+target_link_libraries(Example PRIVATE OpenMP::OpenMP_C Threads::Threads glfw glad freetype)
 target_compile_options(Example PRIVATE -mavx2 -mfma)

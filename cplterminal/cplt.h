@@ -1,3 +1,9 @@
+#pragma once
+
+#define _GNU_SOURCE
+
+#include <pthread.h>
+
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,6 +11,7 @@
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
+#include <malloc.h>
 
 #include "../cpstd/cpbase.h"
 
@@ -80,6 +87,42 @@ void cplt_init(i32 w, i32 h) {
     printf("\x1b[2J");
     cplt_hide_cursor(true);
     cplt_activate_raw_mode();
+}
+
+u32 cplt_get_heap_size() {
+    struct mallinfo2 mi = mallinfo2();
+    return mi.arena;
+}
+
+u32 cplt_get_heap_used() {
+    struct mallinfo2 mi = mallinfo2();
+    return mi.uordblks;
+}
+
+u32 cplt_get_heap_free() {
+    struct mallinfo2 mi = mallinfo2();
+    return mi.fordblks;
+}
+
+u32 cplt_get_stack_size() {
+    pthread_attr_t attr;
+    pthread_getattr_np(pthread_self(), &attr);
+    size_t size = 0;
+    pthread_attr_getstacksize(&attr, &size);
+    pthread_attr_destroy(&attr);
+    return size;
+}
+
+u32 cplt_get_stack_used() {
+    pthread_attr_t attr;
+    pthread_getattr_np(pthread_self(), &attr);
+    void *base = NULL;
+    size_t size = 0;
+    pthread_attr_getstack(&attr, &base, &size);
+    pthread_attr_destroy(&attr);
+    char marker;
+    void *cur = &marker;
+    return (u32)(base + size - cur);
 }
 
 f32 cplt_get_time() {
