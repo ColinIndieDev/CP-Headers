@@ -396,9 +396,6 @@ void cpl_draw_rect_raw(shader *s, rect *r) {
     mat4f transform;
     mat4f_identity(&transform);
 
-    vec3f pos3 = {r->pos.x, r->pos.y, 0.0f};
-    mat4f_translate(&transform, &pos3);
-
     vec3f center3 = {r->size.x * 0.5f, r->size.y * 0.5f, 0.0f};
     vec3f neg_center3 = {-r->size.x * 0.5f, -r->size.y * 0.5f, 0.0f};
     mat4f_translate(&transform, &center3);
@@ -406,7 +403,7 @@ void cpl_draw_rect_raw(shader *s, rect *r) {
     mat4f_translate(&transform, &neg_center3);
 
     cpl_shader_set_mat4f(s, "transform", transform);
-
+    cpl_shader_set_vec3f(s, "offset", &(vec3f){r->pos.x, r->pos.y, 0.0f});
     cpl_shader_set_rgba(s, "input_color", &r->color);
 
     glBindVertexArray(r->vao);
@@ -464,9 +461,6 @@ void cpl_draw_triangle_raw(shader *s, triangle *t) {
     mat4f transform;
     mat4f_identity(&transform);
 
-    vec3f pos3 = {t->pos.x, t->pos.y, 0.0f};
-    mat4f_translate(&transform, &pos3);
-
     vec3f center3 = {t->size.x * 0.5f, t->size.y * 0.5f, 0.0f};
     vec3f neg_center3 = {-t->size.x * 0.5f, -t->size.y * 0.5f, 0.0f};
     mat4f_translate(&transform, &center3);
@@ -474,7 +468,7 @@ void cpl_draw_triangle_raw(shader *s, triangle *t) {
     mat4f_translate(&transform, &neg_center3);
 
     cpl_shader_set_mat4f(s, "transform", transform);
-
+    cpl_shader_set_vec3f(s, "offset", &(vec3f){t->pos.x, t->pos.y, 0.0f});
     cpl_shader_set_rgba(s, "input_color", &t->color);
 
     glBindVertexArray(t->vao);
@@ -544,11 +538,8 @@ void cpl_draw_circle_raw(shader *s, circle *c) {
     mat4f transform;
     mat4f_identity(&transform);
 
-    vec3f pos3 = {c->pos.x, c->pos.y, 0.0f};
-    mat4f_translate(&transform, &pos3);
-
     cpl_shader_set_mat4f(s, "transform", transform);
-
+    cpl_shader_set_vec3f(s, "offset", &(vec3f){c->pos.x, c->pos.y, 0.0f});
     cpl_shader_set_rgba(s, "input_color", &c->color);
 
     glBindVertexArray(c->vao);
@@ -603,6 +594,7 @@ void cpl_draw_line_raw(shader *s, line *l) {
     mat4f_identity(&transform);
 
     cpl_shader_set_mat4f(s, "transform", transform);
+    cpl_shader_set_vec3f(s, "offset", &(vec3f){0.0f, 0.0f, 0.0f});
     cpl_shader_set_rgba(s, "input_color", &l->color);
     glBindVertexArray(l->vao);
     glDrawArrays(GL_LINES, 0, 2);
@@ -910,6 +902,22 @@ void cpl_draw_texture2D_raw(shader *s, texture2D *t) {
 
 // }}}
 
+// {{{ Lights 2D
+
+typedef struct {
+    vec2f pos;
+    f32 radius;
+    f32 intensity;
+    vec4f color;
+} point_light_2D;
+
+typedef struct {
+    f32 intensity;
+    vec4f color;
+} global_light_2D;
+
+// }}}
+
 // {{{ General
 
 // {{{ Variables
@@ -923,6 +931,7 @@ mat4f cpl_projection_2D;
 
 typedef enum {
     CPL_SHAPE_2D_UNLIT,
+    CPL_SHAPE_2D_LIT,
     CPL_TEXT,
     CPL_TEXTURE_2D_UNLIT,
     CPL_DRAW_MODES_COUNT
@@ -1042,8 +1051,11 @@ void cpl_framebuffer_size_callback(GLFWwindow *window, i32 width, i32 height) {
 
 void cpl_init_shaders() {
     cpl_create_shader(&cpl_shaders[CPL_SHAPE_2D_UNLIT],
-                      "shaders/vert/2D/shape_unlit.vert",
+                      "shaders/vert/2D/shape.vert",
                       "shaders/frag/2D/shape_unlit.frag");
+    cpl_create_shader(&cpl_shaders[CPL_SHAPE_2D_LIT],
+                      "shaders/vert/2D/shape.vert",
+                      "shaders/frag/2D/shape_lit.frag");
     cpl_create_shader(&cpl_shaders[CPL_TEXT], "shaders/vert/2D/text.vert",
                       "shaders/frag/2D/text.frag");
     cpl_create_shader(&cpl_shaders[CPL_TEXTURE_2D_UNLIT],
@@ -1155,12 +1167,69 @@ void cpl_draw_text(font *font, char *text, vec2f *pos, f32 scale,
                       color);
 }
 
-void cpl_draw_texture2D(texture *tex, vec2f *pos, vec2f *size, vec4f *color, f32 rot) {
+void cpl_draw_texture2D(texture *tex, vec2f *pos, vec2f *size, vec4f *color,
+                        f32 rot) {
     texture2D t;
-    cpl_create_texture2D(&t, pos, size,
-                         rot, color, tex);
+    cpl_create_texture2D(&t, pos, size, rot, color, tex);
     cpl_draw_texture2D_raw(&cpl_shaders[cpl_cur_draw_mode], &t);
     cpl_destroy_texture2D(&t);
+}
+
+// }}}
+
+void cpl_reset_shader() { cpl_use_shader(&cpl_shaders[cpl_cur_draw_mode]); }
+
+// {{{ Lighting 2D
+
+void cpl_set_ambient_light_2D(f32 strength) {
+    shader *ss = &cpl_shaders[CPL_SHAPE_2D_LIT];
+    cpl_use_shader(ss);
+    cpl_shader_set_f32(ss, "ambient", strength);
+
+    // TODO add for texture 2D extra version if texture_lit exists
+
+    cpl_reset_shader();
+}
+void cpl_set_global_light_2D(global_light_2D *l) {
+    shader *ss = &cpl_shaders[CPL_SHAPE_2D_LIT];
+    cpl_use_shader(ss);
+    cpl_shader_set_f32(ss, "g_light.intensity", l->intensity);
+    cpl_shader_set_rgba(ss, "g_light.color", &l->color);
+
+    // TODO add for texture 2D extra version if texture_lit exists
+
+    cpl_reset_shader();
+}
+
+void cpl_add_point_lights_2D(point_light_2D *ls, u32 size) {
+    shader *ss = &cpl_shaders[CPL_SHAPE_2D_LIT];
+    cpl_use_shader(ss);
+
+    cpl_shader_set_i32(ss, "point_lights_cnt", (i32)size);
+
+    mem_arena *arena = mem_arena_create(KiB(1));
+    for (u32 i = 0; i < size; i++) {
+        char *pos = mem_arena_push(arena, 50, true);
+        snprintf(pos, 50, "point_lights[%d].pos", i);
+        char *radius = mem_arena_push(arena, 50, true);
+        snprintf(radius, 50, "point_lights[%d].r", i);
+        char *intensity = mem_arena_push(arena, 50, true);
+        snprintf(intensity, 50, "point_lights[%d].intensity", i);
+        char *color = mem_arena_push(arena, 50, true);
+        snprintf(color, 50, "point_lights[%d].color", i);
+
+        cpl_shader_set_vec2f(ss, pos, &ls[i].pos);
+        cpl_shader_set_f32(ss, radius, ls[i].radius);
+        cpl_shader_set_f32(ss, intensity, ls[i].intensity);
+        cpl_shader_set_rgba(ss, color, &ls[i].color);
+
+        mem_arena_clear(arena);
+    }
+    mem_arena_destroy(arena);
+
+    // TODO add for texture 2D extra version if texture_lit exists
+
+    cpl_reset_shader();
 }
 
 // }}}

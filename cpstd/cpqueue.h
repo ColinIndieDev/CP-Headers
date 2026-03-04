@@ -1,0 +1,144 @@
+#pragma once
+
+#include <stdlib.h>
+
+#include "cpbase.h"
+
+#define QUEUE_DEF(type, name)                                                  \
+    typedef struct {                                                           \
+        type *data;                                                            \
+        u32 capacity;                                                          \
+        u32 size;                                                              \
+        u32 head;                                                              \
+        u32 tail;                                                              \
+    } name;                                                                    \
+    void name##_init(name *q, u32 capacity) {                                  \
+        q->data = malloc(capacity * sizeof(type));                             \
+        q->capacity = capacity;                                                \
+        q->size = 0;                                                           \
+        q->head = 0;                                                           \
+        q->tail = 0;                                                           \
+    }                                                                          \
+    void name##_destroy(name *q) {                                             \
+        free(q->data);                                                         \
+        q->capacity = 0;                                                       \
+        q->size = 0;                                                           \
+        q->head = 0;                                                           \
+        q->tail = 0;                                                           \
+    }                                                                          \
+    void name##_resize(name *q) {                                              \
+        u32 new_capacity = q->capacity * 2;                                    \
+        type *new_data = malloc(new_capacity * sizeof(type));                  \
+        for (u32 i = 0; i < q->size; i++) {                                    \
+            new_data[i] = q->data[(q->tail + i) % q->capacity];                \
+        }                                                                      \
+        free(q->data);                                                         \
+        q->data = new_data;                                                    \
+        q->capacity = new_capacity;                                            \
+        q->tail = 0;                                                           \
+        q->head = q->size;                                                     \
+    }                                                                          \
+    void name##_push(name *q, type val) {                                      \
+        if (q->size >= q->capacity) {                                          \
+            name##_resize(q);                                                  \
+        }                                                                      \
+        q->data[q->head] = val;                                                \
+        q->head = (q->head + 1) % q->capacity;                                 \
+        q->size++;                                                             \
+    }                                                                          \
+    void name##_pop(name *q, type *data) {                                     \
+        if (q->size <= 0) {                                                    \
+            return;                                                            \
+        }                                                                      \
+        *data = q->data[q->tail];                                              \
+        q->tail = (q->tail + 1) % q->capacity;                                 \
+        q->size--;                                                             \
+    }                                                                          \
+    type *name##_front(name *q) {                                              \
+        if (q->size == 0) {                                                    \
+            return NULL;                                                       \
+        }                                                                      \
+        u32 idx = q->head == 0 ? q->capacity - 1 : q->head - 1;                \
+        return &q->data[idx];                                                  \
+    }                                                                          \
+    type *name##_back(name *q) {                                               \
+        if (q->size == 0) {                                                    \
+            return NULL;                                                       \
+        }                                                                      \
+        return &q->data[q->tail];                                              \
+    }                                                                          \
+    b8 name##_empty(name *q) { return q->size <= 0; }
+
+#define PRIORITY_QUEUE_DEF(type, name)                                         \
+    typedef struct {                                                           \
+        type val;                                                              \
+        f32 priority;                                                          \
+    } name##_node;                                                             \
+    typedef struct {                                                           \
+        name##_node *data;                                                     \
+        u32 size;                                                              \
+        u32 capacity;                                                          \
+    } name;                                                                    \
+    void name##_init(name *q, u32 capacity) {                                  \
+        q->data = malloc(capacity * sizeof(name##_node));                      \
+        q->capacity = capacity;                                                \
+        q->size = 0;                                                           \
+    }                                                                          \
+    void name##_destroy(name *q) {                                             \
+        free(q->data);                                                         \
+        q->size = 0;                                                           \
+        q->capacity = 0;                                                       \
+    }                                                                          \
+    void name##_heapify_up(name *q, u32 i) {                                   \
+        while (i > 0) {                                                        \
+            u32 parent = (i - 1) / 2;                                          \
+            if (q->data[parent].priority >= q->data[i].priority) {             \
+                break;                                                         \
+            }                                                                  \
+            name##_node temp = q->data[parent];                                \
+            q->data[parent] = q->data[i];                                      \
+            q->data[i] = temp;                                                 \
+            i = parent;                                                        \
+        }                                                                      \
+    }                                                                          \
+    void name##_heapify_down(name *q, u32 i) {                                 \
+        while (true) {                                                         \
+            u32 left = 2 * i + 1;                                              \
+            u32 right = 2 * i + 2;                                             \
+            u32 smallest = i;                                                  \
+            if (left < q->size &&                                              \
+                q->data[left].priority > q->data[smallest].priority) {         \
+                smallest = left;                                               \
+            }                                                                  \
+            if (right < q->size &&                                             \
+                q->data[right].priority > q->data[smallest].priority) {        \
+                smallest = right;                                              \
+            }                                                                  \
+            if (smallest == i) {                                               \
+                break;                                                         \
+            }                                                                  \
+            name##_node temp = q->data[i];                                     \
+            q->data[i] = q->data[smallest];                                    \
+            q->data[smallest] = temp;                                          \
+            i = smallest;                                                      \
+        }                                                                      \
+    }                                                                          \
+    void name##_push(name *q, type val, f32 priority) {                        \
+        if (q->size >= q->capacity) {                                          \
+            q->capacity *= 2;                                                  \
+            q->data = realloc(q->data, q->capacity * sizeof(name##_node));     \
+        }                                                                      \
+        q->data[q->size] = (name##_node){val, priority};                       \
+        name##_heapify_up(q, q->size);                                         \
+        q->size++;                                                             \
+    }                                                                          \
+    void name##_pop(name *q, type *val) {                                      \
+        if (q->size <= 0) {                                                    \
+            return;                                                            \
+        }                                                                      \
+        *val = q->data[0].val;                                                 \
+        q->size--;                                                             \
+        q->data[0] = q->data[q->size];                                         \
+        name##_heapify_down(q, 0);                                             \
+    }                                                                          \
+    b8 name##_empty(name *q) { return q->size <= 0; }

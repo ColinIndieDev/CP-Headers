@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.31)
-project(Example)
+
+# Name of executable
+project(CPHeaders)
 
 # C
 set(CMAKE_C_STANDARD 99)
@@ -75,21 +77,24 @@ file(GLOB_RECURSE SOURCE_FILES CONFIGURE DEPENDS cpstd/*.h cplterminal/*.h cpaud
 message(STATUS "============================================")
 message(STATUS "Included files")
 message(STATUS "============================================")
-message(STATUS "----- Files (.c & .h) -----")
 foreach(f IN LISTS SOURCE_FILES)
     file(RELATIVE_PATH rel ${CMAKE_SOURCE_DIR} ${f})
-    message(STATUS "  ${rel}")
+    message(STATUS "    ${rel}")
 endforeach()
+message(STATUS "============================================")
 
-add_executable(Example
-    src/cpl_main.c
+add_executable(${CMAKE_PROJECT_NAME}
+    src/test.c
     ${SOURCE_FILES}
 )
 
 # OpenMP, pthread, GLFW, GLAD, STB & FT
-target_include_directories(Example PRIVATE ${stb_SOURCE_DIR})
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${stb_SOURCE_DIR})
+
 find_package(OpenMP REQUIRED)
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 find_package(Threads REQUIRED)
-target_link_libraries(Example PRIVATE OpenMP::OpenMP_C Threads::Threads glfw glad freetype)
-target_compile_options(Example PRIVATE -mavx2 -mfma)
+
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OpenMP::OpenMP_C Threads::Threads glfw glad freetype)
+
+target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -mavx2 -mfma)

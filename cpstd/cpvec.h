@@ -85,7 +85,8 @@
     type *name##_begin(name *v) { return v->data; }                            \
     type *name##_end(name *v) { return v->data + v->size; }                    \
     type *name##_front(name *v) { return &v->data[0]; }                        \
-    type *name##_back(name *v) { return &v->data[v->size - 1]; }
+    type *name##_back(name *v) { return &v->data[v->size - 1]; }               \
+    b8 name##_empty(name *v) { return v->size <= 0; }
 
 #define FOREACH_VEC(type, vname, it, vptr)                                     \
     for (type *it = vname##_begin(vptr); it != vname##_end(vptr); it++)

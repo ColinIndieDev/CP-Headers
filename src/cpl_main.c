@@ -19,7 +19,8 @@ typedef struct {
 void reset_ball(ball *pong, f32 *speed, f32 start_speed);
 void update(player *p1, player *p2, ball *pong, f32 player_width,
             f32 player_height, f32 off, f32 *ball_speed, f32 ball_speed_start);
-void render(player p1, player p2, ball pong, font *font, texture *tex);
+void render(player p1, player p2, ball pong, font *font, texture *tex,
+            mem_arena *arena);
 
 int main() {
     cpl_init_window(800, 600, "Hello CPL");
@@ -50,13 +51,16 @@ int main() {
     f32 last_reset_time = 0.0f;
 
     font default_font;
-    cpl_create_font(&default_font, "fonts/default.ttf", "default", NEAREST);
+    cpl_create_font(&default_font, "fonts/default.ttf", "default",
+                    CPL_FILTER_NEAREST);
 
     f32 ball_speed_start = 250.0f;
     f32 ball_speed = ball_speed_start;
 
     texture logo;
-    cpl_load_texture(&logo, "assets/logo.png", LINEAR);
+    cpl_load_texture(&logo, "assets/logo.png", CPL_FILTER_LINEAR);
+
+    mem_arena *arena = mem_arena_create(KiB(1));
 
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     while (!cpl_window_should_close()) {
@@ -65,8 +69,9 @@ int main() {
         update(&p1, &p2, &pong, player_width, player_height, off, &ball_speed,
                ball_speed_start);
 
-        render(p1, p2, pong, &default_font, &logo);
+        render(p1, p2, pong, &default_font, &logo, arena);
     }
+    mem_arena_destroy(arena);
     cpl_delete_font(&default_font);
     cpl_unload_texture(&logo);
     cpl_close_window();
@@ -129,10 +134,24 @@ void update(player *p1, player *p2, ball *pong, f32 player_width,
     }
 }
 
-void render(player p1, player p2, ball pong, font *font, texture *tex) {
+void render(player p1, player p2, ball pong, font *font, texture *tex,
+            mem_arena *arena) {
     cpl_clear_background(&BLACK);
 
-    cpl_begin_draw(CPL_SHAPE_2D_UNLIT, false);
+    cpl_begin_draw(CPL_SHAPE_2D_LIT, false);
+
+    cpl_set_ambient_light_2D(0.1f);
+
+    point_light_2D *point_l = malloc(sizeof(point_light_2D) * 1);
+    point_l[0] = (point_light_2D){
+        .pos = pong.p, .radius = 100.0f, .intensity = 1.0f, .color = WHITE};
+
+    cpl_add_point_lights_2D(point_l, 1);
+
+    // Redundant because not affected by light 2D
+    cpl_draw_rect(&(vec2f){0.0f, 0.0f},
+                  &(vec2f){cpl_get_screen_width(), cpl_get_screen_height()},
+                  &BLACK, 0.0f);
 
     cpl_draw_line(
         &(vec2f){cpl_get_screen_width() / 2.0f, 0.0f},
@@ -145,8 +164,6 @@ void render(player p1, player p2, ball pong, font *font, texture *tex) {
     cpl_draw_circle(&pong.p, pong.r, &WHITE);
 
     cpl_begin_draw(CPL_TEXT, false);
-
-    mem_arena *arena = mem_arena_create(KiB(1));
 
     f32 score_font_size = 1.0f;
 
@@ -170,7 +187,7 @@ void render(player p1, player p2, ball pong, font *font, texture *tex) {
                  cpl_get_screen_height() - p2_score_text_size.y - 10.0f},
         score_font_size, &WHITE);
 
-    mem_arena_destroy(arena);
+    mem_arena_clear(arena);
 
     cpl_display_details(font);
 
