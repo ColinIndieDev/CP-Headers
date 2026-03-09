@@ -410,14 +410,14 @@ void cpl_draw_rect_raw(shader *s, rect *r) {
     mat4f transform;
     mat4f_identity(&transform);
 
-    vec3f center3 = {r->size.x * 0.5f, r->size.y * 0.5f, 0.0f};
-    vec3f neg_center3 = {-r->size.x * 0.5f, -r->size.y * 0.5f, 0.0f};
-    mat4f_translate(&transform, &center3);
+    mat4f_translate(&transform, &(vec3f){r->pos.x, r->pos.y, 0.0f});
+    mat4f_translate(&transform,
+                    &(vec3f){r->size.x * 0.5f, r->size.y * 0.5f, 0.0f});
     mat4f_rotate(&transform, cpm_rad(r->rot), &(vec3f){0.0f, 0.0f, 1.0f});
-    mat4f_translate(&transform, &neg_center3);
+    mat4f_translate(&transform,
+                    &(vec3f){-r->size.x * 0.5f, -r->size.y * 0.5f, 0.0f});
 
     cpl_shader_set_mat4f(s, "transform", transform);
-    cpl_shader_set_vec3f(s, "offset", &(vec3f){r->pos.x, r->pos.y, 0.0f});
     cpl_shader_set_rgba(s, "input_color", &r->color);
 
     glBindVertexArray(r->vao);
@@ -475,14 +475,14 @@ void cpl_draw_triangle_raw(shader *s, triangle *t) {
     mat4f transform;
     mat4f_identity(&transform);
 
-    vec3f center3 = {t->size.x * 0.5f, t->size.y * 0.5f, 0.0f};
-    vec3f neg_center3 = {-t->size.x * 0.5f, -t->size.y * 0.5f, 0.0f};
-    mat4f_translate(&transform, &center3);
+    mat4f_translate(&transform, &(vec3f){t->pos.x, t->pos.y, 0.0f});
+    mat4f_translate(&transform,
+                    &(vec3f){t->size.x * 0.5f, t->size.y * 0.5f, 0.0f});
     mat4f_rotate(&transform, cpm_rad(t->rot), &(vec3f){0.0f, 0.0f, 1.0f});
-    mat4f_translate(&transform, &neg_center3);
+    mat4f_translate(&transform,
+                    &(vec3f){-t->size.x * 0.5f, -t->size.y * 0.5f, 0.0f});
 
     cpl_shader_set_mat4f(s, "transform", transform);
-    cpl_shader_set_vec3f(s, "offset", &(vec3f){t->pos.x, t->pos.y, 0.0f});
     cpl_shader_set_rgba(s, "input_color", &t->color);
 
     glBindVertexArray(t->vao);
@@ -551,9 +551,9 @@ void cpl_destroy_circle(circle *c) {
 void cpl_draw_circle_raw(shader *s, circle *c) {
     mat4f transform;
     mat4f_identity(&transform);
+    mat4f_translate(&transform, &(vec3f){c->pos.x, c->pos.y, 0.0f});
 
     cpl_shader_set_mat4f(s, "transform", transform);
-    cpl_shader_set_vec3f(s, "offset", &(vec3f){c->pos.x, c->pos.y, 0.0f});
     cpl_shader_set_rgba(s, "input_color", &c->color);
 
     glBindVertexArray(c->vao);
@@ -606,9 +606,9 @@ void cpl_destroy_line(line *l) {
 void cpl_draw_line_raw(shader *s, line *l) {
     mat4f transform;
     mat4f_identity(&transform);
+    mat4f_translate(&transform, &(vec3f){0.0f, 0.0f, 0.0f});
 
     cpl_shader_set_mat4f(s, "transform", transform);
-    cpl_shader_set_vec3f(s, "offset", &(vec3f){0.0f, 0.0f, 0.0f});
     cpl_shader_set_rgba(s, "input_color", &l->color);
     glBindVertexArray(l->vao);
     glDrawArrays(GL_LINES, 0, 2);
@@ -893,14 +893,12 @@ void cpl_draw_texture2D_raw(shader *s, texture2D *t) {
     mat4f transform;
     mat4f_identity(&transform);
 
-    vec3f pos3 = {t->pos.x, t->pos.y, 0.0f};
-    mat4f_translate(&transform, &pos3);
-
-    vec2f center = {t->pos.x + (t->size.x * 0.5f),
-                    t->pos.y + (t->size.y * 0.5f)};
-    mat4f_translate(&transform, &(vec3f){center.x, center.y, 0.0f});
+    mat4f_translate(&transform, &(vec3f){t->pos.x, t->pos.y, 0.0f});
+    mat4f_translate(&transform,
+                    &(vec3f){t->size.x * 0.5f, t->size.y * 0.5f, 0.0f});
     mat4f_rotate(&transform, cpm_rad(t->rot), &(vec3f){0.0f, 0.0f, 1.0f});
-    mat4f_translate(&transform, &(vec3f){-center.x, -center.y, 0.0f});
+    mat4f_translate(&transform,
+                    &(vec3f){-t->size.x * 0.5f, -t->size.y * 0.5f, 0.0f});
 
     cpl_shader_set_i32(s, "tex", 0);
     cpl_shader_set_mat4f(s, "transform", transform);
@@ -1151,8 +1149,7 @@ void cpl_begin_draw(cpl_draw_mode draw_mode, b8 mode_2D) {
     mat4f view_projection_2D;
     if (mode_2D) {
         mat4f *view = cpl_cam_2D_get_view_mat(&cpl_cam_2D);
-        mat4f_mul(&cpl_projection_2D, view,
-                  &view_projection_2D);
+        mat4f_mul(&cpl_projection_2D, view, &view_projection_2D);
         free(view);
     }
     cpl_shader_set_mat4f(&cpl_shaders[draw_mode], "projection",
@@ -1355,6 +1352,7 @@ void cpl_enable_vsync(b8 enabled) { glfwSwapInterval(enabled); }
 void cpl_update() {
     cpl_calc_fps();
     cpl_calc_dt();
+    cpl_update_input();
 }
 
 void cpl_end_frame() {

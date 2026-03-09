@@ -38,16 +38,30 @@ endif()
 #### Dependencies (CPL) ####
 include(FetchContent)
 
+if (EMSCRIPTEN)
+    set(GLFW_BUILD_WSI_EMSCRIPTEN ON CACHE BOOL "" FORCE)
+    set(GLFW_USE_POSIX_TIME OFF CACHE BOOL "" FORCE)
+    set(GLFW_USE_EMSCRIPTEN ON CACHE BOOL "" FORCE)
+
+    set(GLFW_BUILD_X11 OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_COCOA OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_WIN32 OFF CACHE BOOL "" FORCE)
+    set(GLFW_USE_OSMESA OFF CACHE BOOL "" FORCE)
+endif()
+
 # GLFW
-FetchContent_Declare(
-    glfw
-    GIT_REPOSITORY https://github.com/glfw/glfw.git
-    GIT_TAG master
-)
-set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(glfw)
+if (NOT EMSCRIPTEN)
+    FetchContent_Declare(
+        glfw
+        GIT_REPOSITORY https://github.com/glfw/glfw.git
+        GIT_TAG master
+    )
+    set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(glfw)
+endif()
 
 # STB
 FetchContent_Declare(
@@ -84,7 +98,6 @@ endforeach()
 message(STATUS "============================================")
 
 add_executable(${CMAKE_PROJECT_NAME}
-    src/bird_anim.h
     src/bird_gl.c
     ${SOURCE_FILES}
 )
@@ -96,6 +109,35 @@ find_package(OpenMP REQUIRED)
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 find_package(Threads REQUIRED)
 
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OpenMP::OpenMP_C Threads::Threads glfw glad freetype)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OpenMP::OpenMP_C Threads::Threads glad freetype)
+
+if (NOT EMSCRIPTEN)
+    set(GLFW_BUILD_WAYLAND ON CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_X11 OFF CACHE BOOL "" FORCE)
+
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE glfw)
+endif()
 
 target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -mavx2 -mfma)
+
+if(EMSCRIPTEN)
+    set(ASSETS_DIR "${CMAKE_SOURCE_DIR}/assets")
+    target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
+        "--preload-file" "${ASSETS_DIR}@/assets"
+	    "-sMIN_WEBGL_VERSION=2"
+	    "-sMAX_WEBGL_VERSION=2"
+        "-sUSE_GLFW=3"
+        "-sALLOW_MEMORY_GROWTH=1"
+        "-sFORCE_FILESYSTEM=1"
+        "-sSAFE_HEAP=1"
+
+        "-gsource-map" 
+        "-sASSERTIONS=2" 
+        "-sSTACK_SIZE=1mb" 
+        "-sDISABLE_EXCEPTION_CATCHING=0" 
+        "-fexceptions" 
+        "-sGL_DEBUG=1" 
+        "-g"
+    )
+    set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES SUFFIX ".html")
+endif()
