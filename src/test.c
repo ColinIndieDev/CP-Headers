@@ -2,9 +2,10 @@
 
 #include "../cpstd/cpbitarr.h"
 #include "../cpstd/cphash.h"
-#include "../cpstd/cpqueue.h"
 #include "../cpstd/cplist.h"
+#include "../cpstd/cpqueue.h"
 
+VEC_DEF(i32, vec_i32)
 HASHMAP_DEF(u8, f32, map)
 HASHSET_DEF(u8, set)
 QUEUE_DEF(i32, queue)
@@ -106,7 +107,7 @@ int main() {
 
     ll_str_pop(&friends, 5);
     ll_str_pop(&friends, 4);
- 
+
     ll_str_node *f = ll_str_get(&friends, 0);
     while (f != NULL) {
         printf("%s ", f->val);
@@ -115,4 +116,18 @@ int main() {
     printf("\n");
 
     ll_str_destroy(&friends);
+
+    vec_i32 v1;
+    vec_i32 v2;
+
+    vec_i32_init(&v1, 10, 0);
+    vec_i32_init(&v2, 0, 0);
+
+    for (int i = 0; i < v1.size; i++) {
+        *vec_i32_at(&v1, i) = i;
+    }
+
+    vec_i32_copy(&v1, &v2);
+
+    FOREACH_VEC(int, vec_i32, it, &v2) { printf("%d", *it); }
 }

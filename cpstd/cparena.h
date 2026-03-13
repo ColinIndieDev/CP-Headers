@@ -25,7 +25,7 @@ mem_arena *mem_arena_create(u64 capacity) {
 
 void mem_arena_destroy(mem_arena *arena) { free(arena); }
 
-void *mem_arena_push(mem_arena *arena, u64 size, b8 nz) {
+void *mem_arena_push(mem_arena *arena, u64 size, b8 zero) {
     u64 pos_aligned = ALIGN_POW2(arena->pos, ARENA_ALIGN);
     u64 new_pos = pos_aligned + size;
     if (new_pos > arena->capacity) {
@@ -34,7 +34,7 @@ void *mem_arena_push(mem_arena *arena, u64 size, b8 nz) {
     arena->pos = new_pos;
     u8 *out = (u8 *)arena + pos_aligned;
 
-    if (!nz) {
+    if (zero) {
         memset(out, 0, size);
     }
 

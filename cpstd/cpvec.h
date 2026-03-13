@@ -83,6 +83,21 @@
                i < vec->size && vec->size > 0);                                \
         vec->data[i] = val;                                                    \
     }                                                                          \
+    void name##_copy(name *vec, name *dest) {                                  \
+        dest->size = vec->size;                                                \
+        dest->capacity = vec->capacity;                                        \
+        if (dest->capacity < vec->size) {                                      \
+            if (dest->data != NULL) {                                          \
+                free(dest->data);                                              \
+            }                                                                  \
+            dest->capacity = vec->size * 2;                                    \
+            dest->data = malloc((u64)vec->size * 2 * sizeof(type));            \
+        }                                                                      \
+        for (int i = 0; i < vec->size; i++) {                                  \
+            dest->data[i] = vec->data[i];                                      \
+        }                                                                      \
+    }                                                                          \
+    void name##_clear(name *vec) { vec->size = 0; }                            \
     type *name##_begin(name *v) { return v->data; }                            \
     type *name##_end(name *v) { return v->data + v->size; }                    \
     type *name##_front(name *v) { return &v->data[0]; }                        \
@@ -91,3 +106,15 @@
 
 #define FOREACH_VEC(type, vname, it, vptr)                                     \
     for (type *it = vname##_begin(vptr); it != vname##_end(vptr); it++)
+
+#define VEC_ERASE_IF(v, cond)                                                  \
+    do {                                                                       \
+        u32 w = 0;                                                             \
+        for (u32 _i = 0; _i < (v)->size; _i++) {                               \
+            __auto_type it = (v)->data[_i];                                    \
+            if (!(cond)) {                                                     \
+                (v)->data[w++] = (v)->data[_i];                                \
+            }                                                                  \
+        }                                                                      \
+        (v)->size = w;                                                         \
+    } while (0);

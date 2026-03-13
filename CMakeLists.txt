@@ -139,9 +139,11 @@ endif()
 if (EMSCRIPTEN)
     set(ASSETS_DIR "${CMAKE_SOURCE_DIR}/assets")
     set(SHADERS_DIR "${CMAKE_SOURCE_DIR}/shaders")
+    set(SHADERS_CUSTOM_DIR "${CMAKE_SOURCE_DIR}/shaders_custom")
     target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
         "SHELL:--preload-file ${ASSETS_DIR}@/assets"
         "SHELL:--preload-file ${SHADERS_DIR}@/shaders"
+        "SHELL:--preload-file ${SHADERS_CUSTOM_DIR}@/shaders_custom"
 	    "-sMIN_WEBGL_VERSION=2"
 	    "-sMAX_WEBGL_VERSION=2"
         "-sUSE_GLFW=3"

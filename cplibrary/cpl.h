@@ -448,6 +448,7 @@ void cpl_display_details(font *font);
 
 // }}}
 
+#define CPL_IMPLEMENTATION
 #ifdef CPL_IMPLEMENTATION
 
 // {{{ Logging
@@ -1290,6 +1291,92 @@ void cpl_audio_close() {
 
 // }}}
 
+// {{{ Screen Quad
+
+typedef struct {
+    vec2f size;
+    u32 vbo, vao, rbo, framebuffer, tex_color_buffer;
+} screen_quad;
+
+void cpl_create_screen_quad(screen_quad *q, i32 width, i32 height) {
+    q->size = (vec2f){(f32)width, (f32)height};
+
+    f32 vertices[30] = {-1.0f, 1.0f, 0.0f, 0.0f,  1.0f, -1.0f, -1.0f, 0.0f,
+                        0.0f,  0.0f, 1.0f, -1.0f, 0.0f, 1.0f,  0.0f,
+
+                        -1.0f, 1.0f, 0.0f, 0.0f,  1.0f, 1.0f,  -1.0f, 0.0f,
+                        1.0f,  0.0f, 1.0f, 1.0f,  0.0f, 1.0f,  1.0f};
+
+    glGenVertexArrays(1, &q->vao);
+    glGenBuffers(1, &q->vbo);
+    glBindVertexArray(q->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, q->vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), &vertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(f32),
+                          (void *)NULL);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(f32),
+                          (void *)(3 * sizeof(f32)));
+
+    glGenFramebuffers(1, &q->framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, q->framebuffer);
+
+    glGenTextures(1, &q->tex_color_buffer);
+    glBindTexture(GL_TEXTURE_2D, q->tex_color_buffer);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, (i32)q->size.x, (i32)q->size.y, 0,
+                 GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                           q->tex_color_buffer, 0);
+
+    glGenRenderbuffers(1, &q->rbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, q->rbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, (i32)q->size.x,
+                          (i32)q->size.y);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
+                              GL_RENDERBUFFER, q->rbo);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        cpl_log(LOG_ERR, "Framebuffer is not complete!");
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void cpl_screen_quad_resize(screen_quad *q, i32 width, i32 height) {
+    q->size = (vec2f){(f32)width, (f32)height};
+
+    glBindTexture(GL_TEXTURE_2D, q->tex_color_buffer);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0,
+                 GL_RGB, GL_UNSIGNED_BYTE, NULL);
+
+    glBindRenderbuffer(GL_RENDERBUFFER, q->rbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+}
+
+void cpl_screen_quad_bind(screen_quad *q) {
+    glBindFramebuffer(GL_FRAMEBUFFER, q->framebuffer);
+}
+void cpl_screen_quad_unbind() {
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+}
+
+void cpl_screen_quad_draw(screen_quad *q, shader *s) {
+    cpl_use_shader(s);
+    glBindVertexArray(q->vao);
+    glBindTexture(GL_TEXTURE_2D, q->tex_color_buffer);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
+// }}}
+
 // {{{ General
 
 mat4f *cpl_cam_2D_get_view_mat(cam_2D *cam) {
@@ -1616,21 +1703,23 @@ void cpl_update_input() {
 b8 cpl_is_key_down(i32 key) { return key_states[key - CPL_KEY_SPACE]; }
 b8 cpl_is_key_up(i32 key) { return !key_states[key - CPL_KEY_SPACE]; }
 b8 cpl_is_key_pressed(i32 key) {
-    return key_states[key] && !prev_key_states[key - CPL_KEY_SPACE];
+    return key_states[key - CPL_KEY_SPACE] &&
+           !prev_key_states[key - CPL_KEY_SPACE];
 }
 b8 cpl_is_key_released(i32 key) {
-    return !key_states[key] && prev_key_states[key - CPL_KEY_SPACE];
+    return !key_states[key - CPL_KEY_SPACE] &&
+           prev_key_states[key - CPL_KEY_SPACE];
 }
 
 b8 cpl_is_mouse_down(i32 button) {
     return mouse_button_states[button - CPL_MOUSE_BUTTON_1];
 }
 b8 cpl_is_mouse_pressed(i32 button) {
-    return mouse_button_states[button] &&
+    return mouse_button_states[button - CPL_MOUSE_BUTTON_1] &&
            !prev_mouse_button_states[button - CPL_MOUSE_BUTTON_1];
 }
 b8 cpl_is_mouse_released(i32 button) {
-    return !mouse_button_states[button] &&
+    return !mouse_button_states[button - CPL_MOUSE_BUTTON_1] &&
            prev_mouse_button_states[button - CPL_MOUSE_BUTTON_1];
 }
 vec2f cpl_get_mouse_pos() {

@@ -6,6 +6,7 @@
 #include <emscripten/emscripten.h>
 #endif
 
+#define SURPRISE false
 #define SHOW_DETAILS true
 
 // {{{ Start animation
@@ -113,6 +114,9 @@ bg background;
 f32 tex_width = 800.0f * 1.5f;
 f32 tex_height = 600.0f * 1.5f;
 
+shader blur_shader;
+screen_quad screen;
+
 // }}}
 
 // {{{ Bird
@@ -157,15 +161,7 @@ void spawn_pipe() {
         });
 }
 
-void remove_pipe() {
-    u32 w = 0;
-    for (u32 r = 0; r < pipes.size; r++) {
-        if (pipes.data[r].active) {
-            pipes.data[w++] = pipes.data[r];
-        }
-    }
-    pipes.size = w;
-}
+void remove_pipe() { VEC_ERASE_IF(&pipes, !it.active) }
 
 // }}}
 
@@ -329,11 +325,11 @@ void game_update();
 void game_render();
 
 void main_loop() {
+    cpl_screen_quad_resize(&screen, (i32)cpl_get_screen_width(),
+                           (i32)cpl_get_screen_height());
     cpl_web_window_resize();
     cpl_update();
-    if (!fading) {
-        handle_input();
-    }
+    handle_input();
     handle_collisions();
     game_update();
     game_render();
@@ -383,6 +379,11 @@ void game_init() {
     fly_sound = cpl_load_audio("assets/sounds/jump.mp3");
     restart_sound = cpl_load_audio("assets/sounds/restart.mp3");
     music = cpl_load_audio("assets/sounds/music.mp3");
+
+    cpl_create_shader(&blur_shader, "shaders_custom/post_processing.vert",
+                      "shaders_custom/post_processing.frag");
+    cpl_create_screen_quad(&screen, (i32)cpl_get_screen_width(),
+                           (i32)cpl_get_screen_height());
 }
 
 // }}}
@@ -449,22 +450,25 @@ void handle_collisions() {
 }
 
 void handle_input() {
-    if (cpl_is_key_down(CPL_KEY_ESCAPE)) {
+    if (cpl_is_key_pressed(CPL_KEY_ESCAPE)) {
         cpl_destroy_window();
     }
-    if (cpl_is_mouse_pressed(CPL_MOUSE_BUTTON_LEFT) && !game_over) {
-        if (!player.falling) {
-            player.falling = true;
+    if (!fading) {
+        if (cpl_is_mouse_pressed(CPL_MOUSE_BUTTON_LEFT) && !game_over) {
+            if (!player.falling) {
+                player.falling = true;
+            }
+            player.vel = -player.jmp_force;
+            cpl_audio_play_sound(&fly_sound);
         }
-        player.vel = -player.jmp_force;
-        cpl_audio_play_sound(&fly_sound);
-    }
-    if (cpl_is_mouse_down(CPL_MOUSE_BUTTON_LEFT) && game_over && !restarting) {
-        cpl_audio_play_sound(&restart_sound);
-        if (!restarting) {
-            restarting = true;
-            alpha = 0.0f;
-            restart_clock = cpl_get_time();
+        if (cpl_is_mouse_pressed(CPL_MOUSE_BUTTON_LEFT) && game_over &&
+            !restarting) {
+            cpl_audio_play_sound(&restart_sound);
+            if (!restarting) {
+                restarting = true;
+                alpha = 0.0f;
+                restart_clock = cpl_get_time();
+            }
         }
     }
 }
@@ -474,6 +478,9 @@ void handle_input() {
 // {{{ Rendering
 
 void game_render() {
+#if SURPRISE
+    cpl_screen_quad_bind(&screen);
+#endif
     cpl_clear_background(&(vec4f){132.0f, 226.0f, 138.0f, 255.0f});
     cpl_begin_draw(CPL_TEXTURE_2D_UNLIT, false);
 
@@ -549,12 +556,15 @@ void game_render() {
                                  cpl_get_screen_height() / 2.0f};
             player.vel = 0.0f;
             score = 0;
-            pipes.size = 0;
+            green_pipes_clear(&pipes);
             game_over = false;
             restarting = false;
         }
     }
-
+#if SURPRISE
+    cpl_screen_quad_unbind();
+    cpl_screen_quad_draw(&screen, &blur_shader);
+#endif
     cpl_end_frame();
 }
 
