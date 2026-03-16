@@ -1,8 +1,5 @@
 #pragma once
 
-#include <stdlib.h>
-#include <string.h>
-
 #include "cpmath.h"
 
 #define HASH_EMPTY 0
@@ -25,11 +22,11 @@
         capacity = CPM_MAX(8, capacity);                                       \
         m->capacity = capacity;                                                \
         m->size = 0;                                                           \
-        m->data = malloc(capacity * sizeof(name##_entry));                     \
+        m->data = cp_malloc(capacity * sizeof(name##_entry));                  \
         memset(m->data, 0, capacity * sizeof(name##_entry));                   \
     }                                                                          \
     void name##_destroy(name *m) {                                             \
-        free(m->data);                                                         \
+        cp_free(m->data);                                                      \
         m->capacity = 0;                                                       \
         m->size = 0;                                                           \
     }                                                                          \
@@ -45,7 +42,7 @@
         name##_entry *old_data = m->data;                                      \
         u32 old_capacity = m->capacity;                                        \
         u32 new_capacity = old_capacity * 2;                                   \
-        m->data = malloc(new_capacity * sizeof(name##_entry));                 \
+        m->data = cp_malloc(new_capacity * sizeof(name##_entry));              \
         memset(m->data, 0, new_capacity * sizeof(name##_entry));               \
         m->capacity = new_capacity;                                            \
         m->size = 0;                                                           \
@@ -60,7 +57,7 @@
                 m->data[idx].state = HASH_OCCUPIED;                            \
             }                                                                  \
         }                                                                      \
-        free(old_data);                                                        \
+        cp_free(old_data);                                                     \
     }                                                                          \
     void name##_put(name *m, key_type key, val_type value) {                   \
         u32 idx = name##_probe(m, key);                                        \
@@ -120,11 +117,11 @@
         capacity = CPM_MAX(8, capacity);                                       \
         s->capacity = capacity;                                                \
         s->size = 0;                                                           \
-        s->data = malloc(capacity * sizeof(name##_entry));                     \
+        s->data = cp_malloc(capacity * sizeof(name##_entry));                  \
         memset(s->data, 0, capacity * sizeof(name##_entry));                   \
     }                                                                          \
     void name##_destroy(name *s) {                                             \
-        free(s->data);                                                         \
+        cp_free(s->data);                                                      \
         s->capacity = 0;                                                       \
         s->size = 0;                                                           \
     }                                                                          \
@@ -140,7 +137,7 @@
         name##_entry *old_data = s->data;                                      \
         u32 old_capacity = s->capacity;                                        \
         u32 new_capacity = old_capacity * 2;                                   \
-        s->data = malloc(new_capacity * sizeof(name##_entry));                 \
+        s->data = cp_malloc(new_capacity * sizeof(name##_entry));              \
         memset(s->data, 0, new_capacity * sizeof(name##_entry));               \
         s->capacity = new_capacity;                                            \
         s->size = 0;                                                           \
@@ -154,7 +151,7 @@
                 s->data[idx].state = HASH_OCCUPIED;                            \
             }                                                                  \
         }                                                                      \
-        free(old_data);                                                        \
+        cp_free(old_data);                                                     \
     }                                                                          \
     void name##_put(name *s, key_type key) {                                   \
         u32 idx = name##_probe(s, key);                                        \

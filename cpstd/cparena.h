@@ -1,9 +1,7 @@
 #pragma once
 
-#include <stdlib.h>
-#include <string.h>
-
 #include "cpbase.h"
+#include "cpmemory.h"
 #include "cpmath.h"
 
 typedef struct {
@@ -16,20 +14,20 @@ typedef struct {
 #define ARENA_ALIGN (sizeof(void *))
 
 mem_arena *mem_arena_create(u64 capacity) {
-    mem_arena *arena = malloc(capacity);
+    mem_arena *arena = cp_malloc(capacity);
     arena->capacity = capacity;
     arena->pos = ARENA_BASE_POS;
 
     return arena;
 }
 
-void mem_arena_destroy(mem_arena *arena) { free(arena); }
+void mem_arena_destroy(mem_arena *arena) { cp_free(arena); }
 
 void *mem_arena_push(mem_arena *arena, u64 size, b8 zero) {
     u64 pos_aligned = ALIGN_POW2(arena->pos, ARENA_ALIGN);
     u64 new_pos = pos_aligned + size;
     if (new_pos > arena->capacity) {
-        return NULL;
+        return NULLPTR;
     }
     arena->pos = new_pos;
     u8 *out = (u8 *)arena + pos_aligned;

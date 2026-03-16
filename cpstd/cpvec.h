@@ -1,9 +1,8 @@
 #pragma once
 
 #include <assert.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+
+#include "cpmemory.h"
 
 #define VEC_DEF(type, name)                                                    \
     typedef struct {                                                           \
@@ -13,15 +12,15 @@
     } name;                                                                    \
     void name##_init(name *vec, u32 size, type val) {                          \
         vec->capacity = size > 10 ? size * 2 : 10;                             \
-        vec->data = malloc(vec->capacity * sizeof(type));                      \
+        vec->data = cp_malloc(vec->capacity * sizeof(type));                   \
         vec->size = size;                                                      \
-        for (size_t i = 0; i < vec->size; i++) {                               \
+        for (u32 i = 0; i < vec->size; i++) {                                  \
             vec->data[i] = val;                                                \
         }                                                                      \
     }                                                                          \
     void name##_reserve(name *vec, u32 size) {                                 \
         vec->capacity = size;                                                  \
-        vec->data = malloc(vec->capacity * sizeof(type));                      \
+        vec->data = cp_malloc(vec->capacity * sizeof(type));                   \
         vec->size = 0;                                                         \
     }                                                                          \
     type *name##_at(name *vec, u32 i) {                                        \
@@ -37,8 +36,8 @@
     void name##_push_back(name *vec, type val) {                               \
         if (vec->size >= vec->capacity) {                                      \
             vec->capacity *= 2;                                                \
-            type *temp = realloc(vec->data, vec->capacity * sizeof(type));     \
-            assert(temp != NULL);                                              \
+            type *temp = cp_realloc(vec->data, vec->capacity * sizeof(type));  \
+            assert(temp != NULLPTR);                                           \
             vec->data = temp;                                                  \
         }                                                                      \
         vec->data[vec->size] = val;                                            \
@@ -47,8 +46,8 @@
     void name##_push_front(name *vec, type val) {                              \
         if (vec->size >= vec->capacity) {                                      \
             type *new_data =                                                   \
-                realloc(vec->data, (u64)vec->capacity * 2 * sizeof(type));     \
-            if (new_data != NULL) {                                            \
+                cp_realloc(vec->data, (u64)vec->capacity * 2 * sizeof(type));  \
+            if (new_data != NULLPTR) {                                         \
                 vec->capacity *= 2;                                            \
                 vec->data = new_data;                                          \
             }                                                                  \
@@ -74,7 +73,7 @@
         vec->size--;                                                           \
     }                                                                          \
     void name##_destroy(name *vec) {                                           \
-        free(vec->data);                                                       \
+        cp_free(vec->data);                                                    \
         vec->size = 0;                                                         \
         vec->capacity = 0;                                                     \
     }                                                                          \
@@ -87,11 +86,11 @@
         dest->size = vec->size;                                                \
         dest->capacity = vec->capacity;                                        \
         if (dest->capacity < vec->size) {                                      \
-            if (dest->data != NULL) {                                          \
-                free(dest->data);                                              \
+            if (dest->data != NULLPTR) {                                       \
+                cp_free(dest->data);                                           \
             }                                                                  \
             dest->capacity = vec->size * 2;                                    \
-            dest->data = malloc((u64)vec->size * 2 * sizeof(type));            \
+            dest->data = cp_malloc((u64)vec->size * 2 * sizeof(type));         \
         }                                                                      \
         for (int i = 0; i < vec->size; i++) {                                  \
             dest->data[i] = vec->data[i];                                      \

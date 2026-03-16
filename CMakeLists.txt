@@ -93,6 +93,14 @@ target_include_directories(miniaudio INTERFACE "${CMAKE_BINARY_DIR}/_deps/miniau
 # GLAD
 add_subdirectory(external/glad)
 
+# Suppress in Debug
+set_source_files_properties(glad/src/glad.c PROPERTIES
+    COMPILE_FLAGS "-fno-sanitize=undefined"
+)
+if(TARGET glfw)
+    target_compile_options(glfw PRIVATE -fno-sanitize=undefined)
+endif()
+
 #### Linking ####
 
 # Is used here but normally never do 
@@ -109,7 +117,7 @@ endforeach()
 message(STATUS "============================================")
 
 add_executable(${CMAKE_PROJECT_NAME}
-    src/bird_gl.c
+    src/test.c
     ${SOURCE_FILES}
 )
 

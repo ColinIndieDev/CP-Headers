@@ -1,7 +1,5 @@
 #pragma once
 
-#include <stdbool.h>
-
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
@@ -14,7 +12,12 @@ typedef long long int i64;
 
 typedef float f32;
 typedef double f64;
-typedef bool b8;
+typedef _Bool b8;
+
+#define true 1
+#define false 0
+
+#define NULLPTR ((void *)0)
 
 #define CPM_U8_MAX 255
 #define CPM_I8_MAX 127

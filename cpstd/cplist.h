@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cpbase.h"
+#include "cpmemory.h"
 
 #define LINKED_LIST_DEF(type, name)                                            \
     typedef struct name##_n {                                                  \
@@ -15,7 +16,7 @@
     } name;                                                                    \
     void name##_init(name *l, u32 size) {                                      \
         l->capacity = size * 2;                                                \
-        l->nodes = malloc(l->capacity * sizeof(name##_node));                  \
+        l->nodes = cp_malloc(l->capacity * sizeof(name##_node));               \
         l->size = size;                                                        \
         for (u32 i = 0; i < size; i++) {                                       \
             if (i >= size - 1) {                                               \
@@ -26,19 +27,19 @@
         }                                                                      \
     }                                                                          \
     void name##_destroy(name *l) {                                             \
-        free(l->nodes);                                                        \
+        cp_free(l->nodes);                                                     \
         l->capacity = 0;                                                       \
         l->size = 0;                                                           \
     }                                                                          \
     void name##_reserve(name *l, u32 capacity) {                               \
-        l->nodes = malloc(capacity * sizeof(name##_node));                     \
+        l->nodes = cp_malloc(capacity * sizeof(name##_node));                  \
         l->capacity = capacity;                                                \
         l->size = 0;                                                           \
     }                                                                          \
     void name##_add(name *l, type val) {                                       \
         if (l->capacity <= l->size) {                                          \
-            name##_node *new_data =                                            \
-                realloc(l->nodes, (u64)l->capacity * 2 * sizeof(name##_node)); \
+            name##_node *new_data = cp_realloc(                                \
+                l->nodes, (u64)l->capacity * 2 * sizeof(name##_node));         \
             if (new_data != NULL) {                                            \
                 l->capacity *= 2;                                              \
                 l->nodes = new_data;                                           \

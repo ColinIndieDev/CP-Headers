@@ -236,19 +236,6 @@ void mat2D_div(mat2D *m1, mat2D *m2, mat2D *out) {
     }
 }
 
-void mat2D_print(mat2D *m) {
-    for (int r = 0; r < m->rows; r++) {
-        for (int c = 0; c < m->cols; c++) {
-            printf("%f", *mat2D_at(m, r, c));
-
-            if (c < m->cols - 1) {
-                printf(", ");
-            }
-        }
-        printf("\n");
-    }
-}
-
 typedef union {
     f32 data[4];
     struct {

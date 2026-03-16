@@ -1,8 +1,7 @@
 #pragma once
 
-#include <stdlib.h>
-
 #include "cpbase.h"
+#include "cpmemory.h"
 
 typedef struct {
     u8 *data;
@@ -17,7 +16,7 @@ typedef struct {
 
 str8 *init_str8(u64 capacity) {
     str8 *str;
-    str->data = malloc(capacity);
+    str->data = cp_malloc(capacity);
     str->size = 0;
     str->capacity = capacity;
     return str;

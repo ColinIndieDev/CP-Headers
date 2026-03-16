@@ -32,6 +32,7 @@
 
 #include "../cpstd/cpbase.h"
 #include "../cpstd/cpmath.h"
+#include "../cpstd/cpvec.h"
 
 // {{{ Key Inputs
 
@@ -1349,8 +1350,8 @@ void cpl_screen_quad_resize(screen_quad *q, i32 width, i32 height) {
     q->size = (vec2f){(f32)width, (f32)height};
 
     glBindTexture(GL_TEXTURE_2D, q->tex_color_buffer);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0,
-                 GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB,
+                 GL_UNSIGNED_BYTE, NULL);
 
     glBindRenderbuffer(GL_RENDERBUFFER, q->rbo);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
@@ -1365,7 +1366,7 @@ void cpl_screen_quad_bind(screen_quad *q) {
 void cpl_screen_quad_unbind() {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
 void cpl_screen_quad_draw(screen_quad *q, shader *s) {
@@ -1373,6 +1374,124 @@ void cpl_screen_quad_draw(screen_quad *q, shader *s) {
     glBindVertexArray(q->vao);
     glBindTexture(GL_TEXTURE_2D, q->tex_color_buffer);
     glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
+// }}}
+
+// {{{ Tilemap
+
+#define CPL_TILEMAP_ABS_UV(m, vx, vy)                                          \
+    (vec2f) { (vx) / (m).tex.size.x, (vy) / (m).tex.size.y }
+
+typedef struct {
+    f32 vertices[30];
+    u32 vbo;
+} tile_batch;
+
+VEC_DEF(tile_batch, cpl_tile_batches)
+VEC_DEF(vec2f, cpl_tiles)
+
+typedef struct {
+    cpl_tiles tiles;
+    cpl_tile_batches batches;
+    vec2f size;
+    texture tex;
+    u32 vao;
+} tilemap;
+
+void cpl_create_tilemap(tilemap *m) {
+    cpl_tiles_reserve(&m->tiles, 10);
+    cpl_tile_batches_reserve(&m->batches, 10);
+    glGenVertexArrays(1, &m->vao);
+}
+
+void cpl_tilemap_load_texture(tilemap *m, char *path,
+                              texture_filtering filter) {
+    cpl_load_texture(&m->tex, path, filter);
+}
+
+void cpl_tilemap_set_tile_size(tilemap *m, vec2f *size) { m->size = *size; }
+
+void cpl_tilemap_begin_editing(tilemap *m) {
+    cpl_tile_batches_clear(&m->batches);
+}
+
+void cpl_tilemap_add_tile(tilemap *m, vec2f *pos, vec2f *size, vec2f *uv) {
+    f32 tw = m->size.x / m->tex.size.x;
+    f32 th = m->size.y / m->tex.size.y;
+
+    f32 quad[30] = {
+        pos->x,           pos->y,           0, uv->x,      uv->y + th,
+        pos->x + size->x, pos->y,           0, uv->x + tw, uv->y + th,
+        pos->x + size->x, pos->y + size->y, 0, uv->x + tw, uv->y,
+        pos->x,           pos->y,           0, uv->x,      uv->y + th,
+        pos->x + size->x, pos->y + size->y, 0, uv->x + tw, uv->y,
+        pos->x,           pos->y + size->y, 0, uv->x,      uv->y,
+    };
+
+    tile_batch batch;
+    glGenBuffers(1, &batch.vbo);
+    memcpy(batch.vertices, quad, sizeof(quad));
+    cpl_tile_batches_push_back(&m->batches, batch);
+
+    cpl_tiles_push_back(&m->tiles, *pos);
+}
+
+void cpl_tilemap_delete_tile(tilemap *m, vec2f *pos) {
+    for (int i = 0; i < m->tiles.size; i++) {
+        vec2f *tile = cpl_tiles_at(&m->tiles, i);
+        if (tile->x == pos->x && tile->y == pos->y) {
+            cpl_tiles_delete(&m->tiles, i);
+            break;
+        }
+    }
+    for (int i = 0; i < m->batches.size; i++) {
+        if (cpl_tile_batches_at(&m->batches, i)->vertices[0] == pos->x &&
+            cpl_tile_batches_at(&m->batches, i)->vertices[1] == pos->y) {
+            cpl_tile_batches_delete(&m->batches, i);
+            break;
+        }
+    }
+}
+
+b8 cpl_tilemap_tile_exists(tilemap *m, vec2f *pos) {
+    FOREACH_VEC(vec2f, cpl_tiles, p, &m->tiles) {
+        if (p->x == pos->x && p->y == pos->y) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void cpl_tilemap_draw(tilemap *m, shader *s) {
+    mat4f transform;
+    mat4f_identity(&transform);
+
+    cpl_shader_set_mat4f(s, "transform", transform);
+    cpl_shader_set_rgba(s, "input_color", &WHITE);
+
+    glBindVertexArray(m->vao);
+
+    FOREACH_VEC(tile_batch, cpl_tile_batches, batch, &m->batches) {
+        glBindBuffer(GL_ARRAY_BUFFER, batch->vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(batch->vertices), batch->vertices,
+                     GL_DYNAMIC_DRAW);
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(f32),
+                              (void *)NULL);
+        glEnableVertexAttribArray(0);
+
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(f32),
+                              (void *)(3 * sizeof(f32)));
+        glEnableVertexAttribArray(1);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, m->tex.id);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+    glBindVertexArray(0);
 }
 
 // }}}

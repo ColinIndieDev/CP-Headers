@@ -1,7 +1,7 @@
 #pragma once
 
 #include "cpbase.h"
-#include <stdlib.h>
+#include "cpmemory.h"
 
 typedef struct {
     u8 *data;
@@ -11,10 +11,10 @@ typedef struct {
 void bit_arr_init(bit_arr *a, u32 bits) {
     a->bits = bits;
     u32 bytes = (bits + 7) / 8;
-    a->data = calloc(bytes, 1);
+    a->data = cp_calloc(bytes, 1);
 }
 void bit_arr_destroy(bit_arr *a) {
-    free(a->data);
+    cp_free(a->data);
     a->bits = 0;
 }
 void bit_arr_set(bit_arr *a, u32 i) {

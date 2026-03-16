@@ -1,9 +1,10 @@
-#include <stdio.h>
-
 #include "../cpstd/cpbitarr.h"
 #include "../cpstd/cphash.h"
 #include "../cpstd/cplist.h"
+#include "../cpstd/cpmemory.h"
 #include "../cpstd/cpqueue.h"
+
+#include <stdio.h>
 
 VEC_DEF(i32, vec_i32)
 HASHMAP_DEF(u8, f32, map)
@@ -13,6 +14,15 @@ PRIORITY_QUEUE_DEF(i32, priority_queue)
 LINKED_LIST_DEF(const char *, ll_str)
 
 int main() {
+    for (int i = 0; i < 100; i++) {
+        int *val = cp_malloc(sizeof(int));
+
+        *val = 1092;
+
+        printf("%p: %d\n", val, *val);
+        cp_free(val);
+    }
+
     map m;
     map_init(&m, 3);
 
