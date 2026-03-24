@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdio.h>
+
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
@@ -39,3 +41,20 @@ typedef _Bool b8;
 #define KiB(n) ((u64)(n) << 10)
 #define MiB(n) ((u64)(n) << 20)
 #define GiB(n) ((u64)(n) << 30)
+
+#define PROG_SUCCESS 0
+#define PROG_FAIL (-1)
+
+#define EXIT(s) _exit(s)
+void cexit(i32 status) {
+    fflush(stdout);
+    fflush(stderr);
+    asm volatile (
+        "movl %0, %%edi\n"
+        "movl $60, %%eax\n"
+        "syscall"
+        :
+        : "r"(status)
+        : "%eax", "%edi"
+    );   
+}

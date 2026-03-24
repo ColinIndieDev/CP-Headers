@@ -73,6 +73,7 @@
         }                                                                      \
         if ((f32)m->size / m->capacity > 0.7f) {                               \
             name##_resize(m);                                                  \
+            idx = name##_probe(m, key);                                        \
         }                                                                      \
         m->data[idx].key = key;                                                \
         m->data[idx].value = value;                                            \
@@ -182,6 +183,7 @@
         }                                                                      \
         if ((f32)s->size / s->capacity > 0.7f) {                               \
             name##_resize(s);                                                  \
+            idx = name##_probe(s, key);                                        \
         }                                                                      \
         s->data[idx].key = key;                                                \
         s->data[idx].state = HASH_OCCUPIED;                                    \

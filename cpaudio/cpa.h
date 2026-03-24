@@ -64,7 +64,7 @@ void cpa_fill_wav(FILE *f, vec_note *notes) {
                 cur_note_start = t;
             }
         }
-        i16 sample = (i16)(y * CPM_I16_MAX);
+        i16 sample = (i16)(y * I16_MAX);
 
         cpa_write_u16(f, sample);
     }

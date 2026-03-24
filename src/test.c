@@ -72,7 +72,8 @@ int main() {
             printf("Found key: %c!\n", i);
         }
     }
-
+    
+    // TODO set_destroy or everything else below except set_destroy lead to segfault
     set_destroy(&s);
 
     priority_queue q;
@@ -165,4 +166,6 @@ int main() {
 
     printf("\nTook %.1fms!\n", elapsed * 1000000);
     FOREACH_VEC(i32, vec_i32, it, &v) { printf("%d ", *it); }
+
+    EXIT(PROG_SUCCESS);
 }
