@@ -258,6 +258,11 @@ typedef union {
     };
 } vec2f;
 
+#define VEC2F_INIT(v)                                                          \
+    (vec2f) { v, v }
+#define VEC2F(x, y)                                                            \
+    (vec2f) { x, y }
+
 vec2f vec2f_add(vec2f *a, vec2f *b) {
     return (vec2f){a->x + b->x, a->y + b->y};
 }
@@ -270,6 +275,8 @@ vec2f vec2f_mul(vec2f *a, vec2f *b) {
 vec2f vec2f_div(vec2f *a, vec2f *b) {
     return (vec2f){a->x / b->x, a->y / b->y};
 }
+
+vec2f vec2f_f32_mul(vec2f *a, f32 b) { return (vec2f){a->x * b, a->y * b}; }
 
 f32 vec2f_dist(vec2f *v1, vec2f *v2) {
     f32 a = CPM_ABS(v1->x - v2->x);
@@ -360,6 +367,16 @@ void mat4f_scale(mat4f *m, vec3f *v) {
     m->data[2][2] *= v->z;
 }
 
+vec4f mat4f_mul_vec4f(mat4f *m, vec4f v) {
+    vec4f out;
+    for (u32 i = 0; i < 4; i++) {
+        out.data[i] = (m->data[i][0] * v.data[0]) +
+                      (m->data[i][1] * v.data[1]) +
+                      (m->data[i][2] * v.data[2]) + (m->data[i][3] * v.data[3]);
+    }
+    return out;
+}
+
 void mat4f_mul(mat4f *a, mat4f *b, mat4f *dest) {
     mat4f_identity(dest);
     for (u32 col = 0; col < 4; col++) {
@@ -382,6 +399,62 @@ void mat4f_ortho(mat4f *m, f32 left, f32 right, f32 bottom, f32 top, f32 near,
     m->data[3][0] = -(right + left) / (right - left);
     m->data[3][1] = -(top + bottom) / (top - bottom);
     m->data[3][2] = -(far + near) / (far - near);
+}
+
+static f32 minor_mat3f_det(f32 data[4][4], u32 r, u32 c) {
+    f32 sub[3][3];
+    u32 si = 0;
+    for (int i = 0; i < 4; i++) {
+        if (i == r) {
+            continue;
+        }
+        u32 sj = 0;
+        for (u32 j = 0; j < 4; j++) {
+            if (j == c) {
+                continue;
+            }
+            sub[si][sj++] = data[i][j];
+        }
+        si++;
+    }
+    return (sub[0][0] * (sub[1][1] * sub[2][2] - sub[1][2] * sub[2][1])) -
+           (sub[0][1] * (sub[1][0] * sub[2][2] - sub[1][2] * sub[2][0])) +
+           (sub[0][2] * (sub[1][0] * sub[2][1] - sub[1][1] * sub[2][0]));
+}
+
+f32 mat4f_det(mat4f *m) {
+    f32 det = 0.0f;
+    for (u32 j = 0; j < 4; j++) {
+        f32 cofactor = minor_mat3f_det(m->data, 0, j);
+        if (j % 2 != 0) {
+            cofactor = -cofactor;
+        }
+        det += m->data[0][j] * cofactor;
+    }
+    return det;
+}
+
+void mat4f_inv(mat4f *m, mat4f *out) {
+    f32 cofactors[4][4];
+    for (u32 i = 0; i < 4; i++) {
+        for (u32 j = 0; j < 4; j++) {
+            f32 c = minor_mat3f_det(m->data, i, j);
+            if ((i + j) % 2 != 0) {
+                c = -c;
+            }
+            cofactors[i][j] = c;
+        }
+    }
+    f32 det = 0.0f;
+    for (u32 j = 0; j < 4; j++) {
+        det += m->data[0][j] * cofactors[0][j];
+    }
+    f32 inv_det = 1.0f / det;
+    for (u32 i = 0; i < 4; i++) {
+        for (u32 j = 0; j < 4; j++) {
+            out->data[i][j] = cofactors[j][i] * inv_det;
+        }
+    }
 }
 
 // }}}

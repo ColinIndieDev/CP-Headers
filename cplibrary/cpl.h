@@ -17,6 +17,7 @@
 
 #ifdef CPL_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #define MINIAUDIO_IMPLEMENTATION
 #endif
 
@@ -28,6 +29,7 @@
 #include "stb_image.h"
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include "stb_image_write.h"
 #include <miniaudio.h>
 
 #include "../cpstd/cpbase.h"
@@ -175,11 +177,24 @@
 
 // {{{ Colors
 
-#define WHITE (vec4f){255.0f, 255.0f, 255.0f, 255.0f}
-#define BLACK (vec4f){0.0f, 0.0f, 0.0f, 255.0f}
-#define RED (vec4f){255.0f, 0.0f, 0.0f, 255.0f}
-#define GREEN (vec4f){0.0f, 255.0f, 0.0f, 255.0f}
-#define BLUE (vec4f){0.0f, 0.0f, 255.0f, 255.0f}
+#define RGB(r, g, b) (vec4f){r, g, b, 255.0f}
+#define RGBA(r, g, b, a)                                                       \
+    (vec4f) { r, g, b, a }
+
+#define WHITE RGB(255, 255, 255)
+#define BLACK RGB(0, 0, 0)
+#define RED RGB(255, 0, 0)
+#define ORANGE RGB(255, 127, 0)
+#define YELLOW RGB(255, 255, 0)
+#define LIME_GREEN RGB(0, 255, 0)
+#define GREEN RGB(0, 150, 25)
+#define BLUE RGB(0, 0, 255)
+#define LIGHT_BLUE RGB(0, 255, 255)
+#define PURPLE RGB(127, 0, 255)
+#define PINK RGB(255, 0, 255)
+#define LIGHT_GRAY RGB(200, 200, 200)
+#define DARK_GRAY RGB(64, 64, 64)
+#define BROWN RGB(150, 76, 0)
 
 // }}}
 
@@ -189,6 +204,8 @@ typedef enum { CPL_FILTER_LINEAR, CPL_FILTER_NEAREST } texture_filtering;
 
 typedef enum { LOG_INFO, LOG_WARN, LOG_ERR, LOG_NONE } log_level;
 void cpl_log(log_level level, char *message, ...);
+
+void cpl_screenshot(char *path, vec2f screen);
 
 u32 cpl_get_heap_size();
 u32 cpl_get_heap_used();
@@ -392,9 +409,9 @@ typedef struct {
 } circle_collider;
 b8 cpl_check_collision_rects(rect_collider *a, rect_collider *b);
 b8 cpl_check_collision_circle_rect(circle_collider *a, rect_collider *b);
-b8 cpl_check_collision_vec2f_rect(vec2f *a, rect_collider *b);
+b8 cpl_check_collision_vec2f_rect(vec2f a, rect_collider *b);
 b8 cpl_check_collision_circles(circle_collider *a, circle_collider *b);
-b8 cpl_check_collision_vec2f_circle(vec2f *a, circle_collider *b);
+b8 cpl_check_collision_vec2f_circle(vec2f a, circle_collider *b);
 
 void cpl_framebuffer_size_callback(GLFWwindow *window, i32 width, i32 height);
 void cpl_init_shaders();
@@ -403,16 +420,16 @@ b8 cpl_window_should_close();
 void cpl_destroy_window();
 void cpl_close_window();
 
-void cpl_clear_background(vec4f *color);
+void cpl_clear_background(vec4f color);
 void cpl_begin_draw(cpl_draw_mode draw_mode, b8 mode_2D);
-void cpl_draw_rect(vec2f *pos, vec2f *size, vec4f *color, f32 rot);
-void cpl_draw_triangle(vec2f *pos, vec2f *size, vec4f *color, f32 rot);
-void cpl_draw_circle(vec2f *pos, f32 radius, vec4f *color);
-void cpl_draw_line(vec2f *start, vec2f *end, f32 thickness, vec4f *color);
-void cpl_draw_text(font *font, char *text, vec2f *pos, f32 scale, vec4f *color);
-void cpl_draw_text_shadow(font *font, char *text, vec2f *pos, f32 scale,
-                          vec4f *color, vec2f *shadow_off, vec4f *shadow_color);
-void cpl_draw_texture2D(texture *tex, vec2f *pos, vec2f *size, vec4f *color,
+void cpl_draw_rect(vec2f pos, vec2f size, vec4f color, f32 rot);
+void cpl_draw_triangle(vec2f pos, vec2f size, vec4f color, f32 rot);
+void cpl_draw_circle(vec2f pos, f32 radius, vec4f color);
+void cpl_draw_line(vec2f start, vec2f end, f32 thickness, vec4f color);
+void cpl_draw_text(font *font, char *text, vec2f pos, f32 scale, vec4f color);
+void cpl_draw_text_shadow(font *font, char *text, vec2f pos, f32 scale,
+                          vec4f color, vec2f shadow_off, vec4f shadow_color);
+void cpl_draw_texture2D(texture *tex, vec2f pos, vec2f size, vec4f color,
                         f32 rot);
 
 void cpl_reset_shader();
@@ -442,6 +459,7 @@ void cpl_set_time_scale(f32 scale);
 
 f32 cpl_get_screen_width();
 f32 cpl_get_screen_height();
+vec2f cpl_get_screen_size();
 void cpl_enable_vsync(b8 enabled);
 void cpl_update();
 void cpl_end_frame();
@@ -449,6 +467,7 @@ void cpl_display_details(font *font);
 
 // }}}
 
+#define CPL_IMPLEMENTATION
 #ifdef CPL_IMPLEMENTATION
 
 // {{{ Logging
@@ -511,6 +530,32 @@ void cpl_log(log_level level, char *message, ...) {
     }
     va_end(args);
     printf("\n");
+}
+
+// }}}
+
+// {{{ Screenshot
+
+void cpl_screenshot(char *path, vec2f screen) {
+    static i32 screenshots_taken = 0;
+    i32 w = (i32)screen.x;
+    i32 h = (i32)screen.y;
+    i32 s = w * 3;
+    u8 pixels[w * h * 3];
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+    for (i32 y = 0; y < h / 2; y++) {
+        for (i32 x = 0; x < s; x++) {
+            u8 tmp = pixels[(y * s) + x];
+            pixels[(y * s) + x] = pixels[((h - 1 - y) * s) + x];
+            pixels[((h - 1 - y) * s) + x] = tmp;
+        }
+    }
+    char final[100];
+    snprintf(final, sizeof(final), "%sscreenshot%d.png", path,
+             screenshots_taken);
+    stbi_write_png(final, w, h, 3, pixels, s);
+    screenshots_taken++;
 }
 
 // }}}
@@ -1539,9 +1584,9 @@ b8 cpl_check_collision_circle_rect(circle_collider *a, rect_collider *b) {
     return vec2f_length(&delta) <= a->radius;
 }
 
-b8 cpl_check_collision_vec2f_rect(vec2f *a, rect_collider *b) {
-    return b->pos.x < a->x && a->x < b->pos.x + b->size.x && b->pos.y < a->y &&
-           a->y < b->pos.y + b->size.y;
+b8 cpl_check_collision_vec2f_rect(vec2f a, rect_collider *b) {
+    return b->pos.x < a.x && a.x < b->pos.x + b->size.x && b->pos.y < a.y &&
+           a.y < b->pos.y + b->size.y;
 }
 
 b8 cpl_check_collision_circles(circle_collider *a, circle_collider *b) {
@@ -1551,8 +1596,8 @@ b8 cpl_check_collision_circles(circle_collider *a, circle_collider *b) {
     return distance2 <= radius_sum * radius_sum;
 }
 
-b8 cpl_check_collision_vec2f_circle(vec2f *a, circle_collider *b) {
-    vec2f dist = vec2f_sub(a, &b->pos);
+b8 cpl_check_collision_vec2f_circle(vec2f a, circle_collider *b) {
+    vec2f dist = vec2f_sub(&a, &b->pos);
     f32 distance2 = (dist.x * dist.x) + (dist.y * dist.y);
     return distance2 <= b->radius * b->radius;
 }
@@ -1669,9 +1714,9 @@ void cpl_close_window() { glfwTerminate(); }
 
 // {{{ Drawing
 
-void cpl_clear_background(vec4f *color) {
-    glClearColor(color->r / 255.0f, color->g / 255.0f, color->b / 255.0f,
-                 color->a / 255.0f);
+void cpl_clear_background(vec4f color) {
+    glClearColor(color.r / 255.0f, color.g / 255.0f, color.b / 255.0f,
+                 color.a / 255.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
@@ -1689,56 +1734,54 @@ void cpl_begin_draw(cpl_draw_mode draw_mode, b8 mode_2D) {
                          mode_2D ? view_projection_2D : cpl_projection_2D);
 }
 
-void cpl_draw_rect(vec2f *pos, vec2f *size, vec4f *color, f32 rot) {
+void cpl_draw_rect(vec2f pos, vec2f size, vec4f color, f32 rot) {
     rect r;
-    cpl_create_rect(&r, pos, size, color, rot);
+    cpl_create_rect(&r, &pos, &size, &color, rot);
     cpl_draw_rect_raw(&cpl_shaders[cpl_cur_draw_mode], &r);
     cpl_destroy_rect(&r);
 }
 
-void cpl_draw_triangle(vec2f *pos, vec2f *size, vec4f *color, f32 rot) {
+void cpl_draw_triangle(vec2f pos, vec2f size, vec4f color, f32 rot) {
     triangle t;
-    cpl_create_triangle(&t, pos, size, color, rot);
+    cpl_create_triangle(&t, &pos, &size, &color, rot);
     cpl_draw_triangle_raw(&cpl_shaders[cpl_cur_draw_mode], &t);
     cpl_destroy_triangle(&t);
 }
 
-void cpl_draw_circle(vec2f *pos, f32 radius, vec4f *color) {
+void cpl_draw_circle(vec2f pos, f32 radius, vec4f color) {
     circle c;
-    cpl_create_circle(&c, pos, radius, color);
+    cpl_create_circle(&c, &pos, radius, &color);
     cpl_draw_circle_raw(&cpl_shaders[cpl_cur_draw_mode], &c);
     cpl_destroy_circle(&c);
 }
 
-void cpl_draw_line(vec2f *start, vec2f *end, f32 thickness, vec4f *color) {
+void cpl_draw_line(vec2f start, vec2f end, f32 thickness, vec4f color) {
     line l;
-    cpl_create_line(&l, start, end, color);
+    cpl_create_line(&l, &start, &end, &color);
     glLineWidth(thickness);
     cpl_draw_line_raw(&cpl_shaders[cpl_cur_draw_mode], &l);
     glLineWidth(1.0f);
     cpl_destroy_line(&l);
 }
 
-void cpl_draw_text(font *font, char *text, vec2f *pos, f32 scale,
-                   vec4f *color) {
-    cpl_draw_text_raw(&cpl_shaders[cpl_cur_draw_mode], font, text, pos, scale,
-                      color);
+void cpl_draw_text(font *font, char *text, vec2f pos, f32 scale, vec4f color) {
+    cpl_draw_text_raw(&cpl_shaders[cpl_cur_draw_mode], font, text, &pos, scale,
+                      &color);
 }
 
-void cpl_draw_text_shadow(font *font, char *text, vec2f *pos, f32 scale,
-                          vec4f *color, vec2f *shadow_off,
-                          vec4f *shadow_color) {
+void cpl_draw_text_shadow(font *font, char *text, vec2f pos, f32 scale,
+                          vec4f color, vec2f shadow_off, vec4f shadow_color) {
     cpl_draw_text_raw(&cpl_shaders[cpl_cur_draw_mode], font, text,
-                      &(vec2f){pos->x + shadow_off->x, pos->y + shadow_off->y},
-                      scale, shadow_color);
-    cpl_draw_text_raw(&cpl_shaders[cpl_cur_draw_mode], font, text, pos, scale,
-                      color);
+                      &(vec2f){pos.x + shadow_off.x, pos.y + shadow_off.y},
+                      scale, &shadow_color);
+    cpl_draw_text_raw(&cpl_shaders[cpl_cur_draw_mode], font, text, &pos, scale,
+                      &color);
 }
 
-void cpl_draw_texture2D(texture *tex, vec2f *pos, vec2f *size, vec4f *color,
+void cpl_draw_texture2D(texture *tex, vec2f pos, vec2f size, vec4f color,
                         f32 rot) {
     texture2D t;
-    cpl_create_texture2D(&t, pos, size, rot, color, tex);
+    cpl_create_texture2D(&t, &pos, &size, rot, &color, tex);
     cpl_draw_texture2D_raw(&cpl_shaders[cpl_cur_draw_mode], &t);
     cpl_destroy_texture2D(&t);
 }
@@ -1846,6 +1889,15 @@ vec2f cpl_get_mouse_pos() {
     glfwGetCursorPos(cpl_window, &x, &y);
     return (vec2f){(f32)x, (f32)y};
 }
+vec2f cpl_get_screen_to_world_2D(vec2f sp) {
+    f32 x = sp.x;
+    f32 y = sp.y;
+    x /= cpl_cam_2D.zoom;
+    y /= cpl_cam_2D.zoom;
+    x += cpl_cam_2D.pos.x;
+    y += cpl_cam_2D.pos.y;
+    return (vec2f){x, y};
+}
 
 // }}}
 
@@ -1889,6 +1941,9 @@ void cpl_set_time_scale(f32 scale) { cpl_time_scale = scale; }
 
 f32 cpl_get_screen_width() { return cpl_screen_width; }
 f32 cpl_get_screen_height() { return cpl_screen_height; }
+vec2f cpl_get_screen_size() {
+    return (vec2f){cpl_screen_width, cpl_screen_height};
+}
 
 void cpl_enable_vsync(b8 enabled) { glfwSwapInterval(enabled); }
 
@@ -1929,14 +1984,14 @@ void cpl_display_details(font *font) {
     snprintf(heap_free, 50, "Heap free: %d MB",
              (i32)MB((f32)cpl_get_heap_free()));
 
-    cpl_draw_text(font, version_str, &(vec2f){10.0f, 10.0f}, 0.5f, &WHITE);
-    cpl_draw_text(font, renderer_str, &(vec2f){10.0f, 40.0f}, 0.5f, &WHITE);
-    cpl_draw_text(font, vendor_str, &(vec2f){10.0f, 70.0f}, 0.5f, &WHITE);
-    cpl_draw_text(font, fps, &(vec2f){10.0f, 100.0f}, 0.5f, &WHITE);
-    cpl_draw_text(font, stack_used, &(vec2f){10.0f, 130.0f}, 0.5f, &WHITE);
-    cpl_draw_text(font, heap_total, &(vec2f){10.0f, 160.0f}, 0.5f, &WHITE);
-    cpl_draw_text(font, heap_used, &(vec2f){10.0f, 190.0f}, 0.5f, &WHITE);
-    cpl_draw_text(font, heap_free, &(vec2f){10.0f, 220.0f}, 0.5f, &WHITE);
+    cpl_draw_text(font, version_str, (vec2f){10.0f, 10.0f}, 0.5f, WHITE);
+    cpl_draw_text(font, renderer_str, (vec2f){10.0f, 40.0f}, 0.5f, WHITE);
+    cpl_draw_text(font, vendor_str, (vec2f){10.0f, 70.0f}, 0.5f, WHITE);
+    cpl_draw_text(font, fps, (vec2f){10.0f, 100.0f}, 0.5f, WHITE);
+    cpl_draw_text(font, stack_used, (vec2f){10.0f, 130.0f}, 0.5f, WHITE);
+    cpl_draw_text(font, heap_total, (vec2f){10.0f, 160.0f}, 0.5f, WHITE);
+    cpl_draw_text(font, heap_used, (vec2f){10.0f, 190.0f}, 0.5f, WHITE);
+    cpl_draw_text(font, heap_free, (vec2f){10.0f, 220.0f}, 0.5f, WHITE);
 }
 
 // }}}

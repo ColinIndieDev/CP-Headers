@@ -23,17 +23,17 @@ void start_anim_init() {
 
 void start_anim_update() {
     cpl_begin_draw(CPL_SHAPE_2D_UNLIT, false);
-    cpl_draw_rect(&(vec2f){0.0f, 0.0f},
-                  &(vec2f){cpl_get_screen_width(), cpl_get_screen_height()},
-                  &(vec4f){0.0f, 0.0f, 0.0f, alpha_bg}, 0.0f);
+    cpl_draw_rect(VEC2F_INIT(0.0f), cpl_get_screen_size(),
+                  RGBA(0.0f, 0.0f, 0.0f, alpha_bg), 0.0f);
 
     f32 logo_size = 500.0f;
 
     cpl_begin_draw(CPL_TEXTURE_2D_UNLIT, false);
-    vec2f logo_pos = {(cpl_get_screen_width() / 2.0f) - (logo_size / 2.0f),
-                      (cpl_get_screen_height() / 2.0f) - (logo_size / 2.0f)};
-    cpl_draw_texture2D(&logo, &logo_pos, &(vec2f){logo_size, logo_size},
-                       &(vec4f){255.0f, 255.0f, 255.0f, alpha_logo}, 0.0f);
+    vec2f logo_pos = {.x = (cpl_get_screen_width() / 2.0f) - (logo_size / 2.0f),
+                      .y = (cpl_get_screen_height() / 2.0f) -
+                           (logo_size / 2.0f)};
+    cpl_draw_texture2D(&logo, logo_pos, VEC2F_INIT(logo_size),
+                       RGBA(255.0f, 255.0f, 255.0f, alpha_logo), 0.0f);
 
     if (alpha_logo > 0) {
         alpha_logo -= (75.f * cpl_get_dt());
@@ -161,7 +161,7 @@ void spawn_pipe() {
         });
 }
 
-void remove_pipe() { VEC_ERASE_IF(&pipes, !it.active) }
+void remove_pipe() { VEC_ERASE_IF(&pipes, !it.active); }
 
 // }}}
 
@@ -172,16 +172,15 @@ void bg_init(bg *b) {
     positions_reserve(&b->building_positions, 3);
     positions_reserve(&b->forest_positions, 3);
 
-    positions_push_back(&b->sky_positions, (vec2f){0.0f, 0.0f});
-    positions_push_back(&b->sky_positions, (vec2f){tex_width, 0.0f});
-    positions_push_back(&b->sky_positions, (vec2f){tex_width * 2.0f, 0.0f});
-    positions_push_back(&b->building_positions, (vec2f){0.0f, 0.0f});
-    positions_push_back(&b->building_positions, (vec2f){tex_width, 0.0f});
-    positions_push_back(&b->building_positions,
-                        (vec2f){tex_width * 2.0f, 0.0f});
-    positions_push_back(&b->forest_positions, (vec2f){0.0f, 0.0f});
-    positions_push_back(&b->forest_positions, (vec2f){tex_width, 0.0f});
-    positions_push_back(&b->forest_positions, (vec2f){tex_width * 2.0f, 0.0f});
+    positions_push_back(&b->sky_positions, VEC2F_INIT(0.0f));
+    positions_push_back(&b->sky_positions, VEC2F(tex_width, 0.0f));
+    positions_push_back(&b->sky_positions, VEC2F(tex_width * 2.0f, 0.0f));
+    positions_push_back(&b->building_positions, VEC2F_INIT(0.0f));
+    positions_push_back(&b->building_positions, VEC2F(tex_width, 0.0f));
+    positions_push_back(&b->building_positions, VEC2F(tex_width * 2.0f, 0.0f));
+    positions_push_back(&b->forest_positions, VEC2F_INIT(0.0f));
+    positions_push_back(&b->forest_positions, VEC2F(tex_width, 0.0f));
+    positions_push_back(&b->forest_positions, VEC2F(tex_width * 2.0f, 0.0f));
 }
 void bg_update(bg *b) {
     FOREACH_VEC(vec2f, positions, pos, &b->sky_positions) {
@@ -199,21 +198,21 @@ void bg_update(bg *b) {
         f32 right_x = positions_back(&b->sky_positions)->x;
         positions_pop_front(&b->sky_positions);
         positions_push_back(&b->sky_positions,
-                            (vec2f){right_x + tex_width, 0.0f});
+                            VEC2F(right_x + tex_width, 0.0f));
     }
     if (!positions_empty(&b->building_positions) &&
         positions_front(&b->building_positions)->x + tex_width <= 0) {
         f32 right_x = positions_back(&b->building_positions)->x;
         positions_pop_front(&b->building_positions);
         positions_push_back(&b->building_positions,
-                            (vec2f){right_x + tex_width, 0.0f});
+                            VEC2F(right_x + tex_width, 0.0f));
     }
     if (!positions_empty(&b->forest_positions) &&
         positions_front(&b->forest_positions)->x + tex_width <= 0) {
         f32 right_x = positions_back(&b->forest_positions)->x;
         positions_pop_front(&b->forest_positions);
         positions_push_back(&b->forest_positions,
-                            (vec2f){right_x + tex_width, 0.0f});
+                            VEC2F(right_x + tex_width, 0.0f));
     }
 }
 
@@ -233,9 +232,9 @@ void ui_menu() {
         f32 text_width = cpl_get_text_size(&default_font, text, 2.0f).x;
         cpl_draw_text_shadow(
             &default_font, text,
-            &(vec2f){(cpl_get_screen_width() / 2.0f) - (text_width / 2.0f),
-                     48.0f * 2.0f},
-            2.0f, &WHITE, &(vec2f){5.0f, -5.0f}, &BLACK);
+            VEC2F((cpl_get_screen_width() / 2.0f) - (text_width / 2.0f),
+                  48.0f * 2.0f),
+            2.0f, WHITE, VEC2F(5.0f, -5.0f), BLACK);
     }
 
     {
@@ -243,9 +242,9 @@ void ui_menu() {
         f32 text_width = cpl_get_text_size(&default_font, text, 0.5f).x;
         cpl_draw_text_shadow(
             &default_font, text,
-            &(vec2f){(cpl_get_screen_width() / 2.0f) - (text_width / 2.0f),
-                     cpl_get_screen_height() / 1.5f},
-            0.5f, &WHITE, &(vec2f){5.0f, -5.0f}, &BLACK);
+            VEC2F((cpl_get_screen_width() / 2.0f) - (text_width / 2.0f),
+                  cpl_get_screen_height() / 1.5f),
+            0.5f, WHITE, VEC2F(5.0f, -5.0f), BLACK);
     }
 
     {
@@ -254,9 +253,9 @@ void ui_menu() {
         f32 text_width = cpl_get_text_size(&default_font, text, 0.75f).x;
         cpl_draw_text_shadow(
             &default_font, text,
-            &(vec2f){(cpl_get_screen_width() / 2.0f) - (text_width / 2.0f),
-                     48.0f * 5.0f},
-            0.75f, &WHITE, &(vec2f){5.0f, -5.0f}, &BLACK);
+            VEC2F((cpl_get_screen_width() / 2.0f) - (text_width / 2.0f),
+                  48.0f * 5.0f),
+            0.75f, WHITE, VEC2F(5.0f, -5.0f), BLACK);
     }
 }
 
@@ -266,9 +265,9 @@ void ui_game_over() {
         f32 text_width = cpl_get_text_size(&default_font, text, 2.0f).x;
         cpl_draw_text_shadow(
             &default_font, text,
-            &(vec2f){(cpl_get_screen_width() / 2.0f) - (text_width / 2.0f),
-                     48.0f * 2.0f},
-            2.0f, &WHITE, &(vec2f){5.0f, -5.0f}, &BLACK);
+            VEC2F((cpl_get_screen_width() / 2.0f) - (text_width / 2.0f),
+                  48.0f * 2.0f),
+            2.0f, WHITE, VEC2F(5.0f, -5.0f), BLACK);
     }
 
     {
@@ -276,9 +275,9 @@ void ui_game_over() {
         f32 text_width = cpl_get_text_size(&default_font, text, 0.5f).x;
         cpl_draw_text_shadow(
             &default_font, text,
-            &(vec2f){(cpl_get_screen_width() / 2.0f) - (text_width / 2.0f),
-                     cpl_get_screen_height() / 1.5f},
-            0.5f, &WHITE, &(vec2f){5.0f, -5.0f}, &BLACK);
+            VEC2F((cpl_get_screen_width() / 2.0f) - (text_width / 2.0f),
+                  cpl_get_screen_height() / 1.5f),
+            0.5f, WHITE, VEC2F(5.0f, -5.0f), BLACK);
     }
 
     {
@@ -287,9 +286,9 @@ void ui_game_over() {
         f32 text_width = cpl_get_text_size(&default_font, text, 0.75f).x;
         cpl_draw_text_shadow(
             &default_font, text,
-            &(vec2f){(cpl_get_screen_width() / 2.0f) - (text_width / 2.0f),
-                     48.0f * 5.0f},
-            0.75f, &WHITE, &(vec2f){5.0f, -5.0f}, &BLACK);
+            VEC2F((cpl_get_screen_width() / 2.0f) - (text_width / 2.0f),
+                  48.0f * 5.0f),
+            0.75f, WHITE, VEC2F(5.0f, -5.0f), BLACK);
     }
 }
 
@@ -364,7 +363,7 @@ void game_init() {
 #endif
     green_pipes_reserve(&pipes, 100);
     player.pos =
-        (vec2f){cpl_get_screen_width() / 2.0f, cpl_get_screen_height() / 2.0f};
+        VEC2F(cpl_get_screen_width() / 2.0f, cpl_get_screen_height() / 2.0f);
     bg_init(&background);
     cpl_load_texture(&sky_tex, "assets/images/sky.png", CPL_FILTER_LINEAR);
     cpl_load_texture(&building_tex, "assets/images/buildings.png",
@@ -425,7 +424,7 @@ void handle_collisions() {
         }
         rect_collider lower_pipe_collider = {.pos = p->pos, .size = p->size};
         rect_collider upper_pipe_collider = {
-            .pos = (vec2f){p->pos.x, p->pos.y - p->size.y - gap},
+            .pos = VEC2F(p->pos.x, p->pos.y - p->size.y - gap),
             .size = p->size};
 
         if (cpl_check_collision_circle_rect(&player_collider,
@@ -452,6 +451,9 @@ void handle_collisions() {
 void handle_input() {
     if (cpl_is_key_pressed(CPL_KEY_ESCAPE)) {
         cpl_destroy_window();
+    }
+    if (cpl_is_key_pressed(CPL_KEY_F11)) {
+        cpl_screenshot("screenshots/", cpl_get_screen_size());
     }
     if (!fading) {
         if (cpl_is_mouse_pressed(CPL_MOUSE_BUTTON_LEFT) && !game_over) {
@@ -481,41 +483,40 @@ void game_render() {
 #if SURPRISE
     cpl_screen_quad_bind(&screen);
 #endif
-    cpl_clear_background(&(vec4f){132.0f, 226.0f, 138.0f, 255.0f});
+    cpl_clear_background(RGB(132.0f, 226.0f, 138.0f));
     cpl_begin_draw(CPL_TEXTURE_2D_UNLIT, false);
 
     vec2f tex_size = {.x = tex_width, .y = tex_height};
     FOREACH_VEC(vec2f, positions, p, &background.sky_positions) {
-        cpl_draw_texture2D(&sky_tex, p, &tex_size, &WHITE, 0.0f);
+        cpl_draw_texture2D(&sky_tex, *p, tex_size, WHITE, 0.0f);
     }
     FOREACH_VEC(vec2f, positions, p, &background.building_positions) {
-        cpl_draw_texture2D(&building_tex, p, &tex_size, &WHITE, 0.0f);
+        cpl_draw_texture2D(&building_tex, *p, tex_size, WHITE, 0.0f);
     }
     FOREACH_VEC(vec2f, positions, p, &background.forest_positions) {
-        cpl_draw_texture2D(&forest_tex, p, &tex_size, &WHITE, 0.0f);
+        cpl_draw_texture2D(&forest_tex, *p, tex_size, WHITE, 0.0f);
     }
 
     FOREACH_VEC(green_pipe, green_pipes, p, &pipes) {
         cpl_draw_texture2D(&pipe_tex,
-                           &(vec2f){p->pos.x, p->pos.y - p->size.y - gap},
-                           &p->size, &WHITE, 180.0f);
-        cpl_draw_texture2D(&pipe_tex, &(vec2f){p->pos.x, p->pos.y}, &p->size,
-                           &WHITE, 0.0f);
+                           VEC2F(p->pos.x, p->pos.y - p->size.y - gap), p->size,
+                           WHITE, 180.0f);
+        cpl_draw_texture2D(&pipe_tex, VEC2F(p->pos.x, p->pos.y), p->size, WHITE,
+                           0.0f);
     }
 
-    vec2f off = {player.radius * 2.25f, player.radius * 2.25f};
+    vec2f off = {.x = player.radius * 2.25f, .y = player.radius * 2.25f};
 
     cpl_draw_texture2D(&bird_tex,
-                       &(vec2f){player.pos.x - off.x, player.pos.y - off.y},
-                       &(vec2f){player.radius * 4.5f, player.radius * 4.5f},
-                       &WHITE, player.rot);
+                       VEC2F(player.pos.x - off.x, player.pos.y - off.y),
+                       VEC2F_INIT(player.radius * 4.5f), WHITE, player.rot);
 
     cpl_begin_draw(CPL_SHAPE_2D_UNLIT, false);
 
     if (game_over && !restarting) {
-        cpl_draw_rect(&(vec2f){0.0f, 0.0f},
-                      &(vec2f){cpl_get_screen_width(), cpl_get_screen_height()},
-                      &(vec4f){0.0f, 0.0f, 0.0f, 150.0f}, 0.0f);
+        cpl_draw_rect(VEC2F_INIT(0.0f),
+                      VEC2F(cpl_get_screen_width(), cpl_get_screen_height()),
+                      (vec4f){0.0f, 0.0f, 0.0f, 150.0f}, 0.0f);
     }
 
     cpl_begin_draw(CPL_TEXT, false);
@@ -529,8 +530,8 @@ void game_render() {
     if (player.falling) {
         cpl_draw_text_shadow(
             &default_font, score_text,
-            &(vec2f){(cpl_get_screen_width() / 2.0f) - (text_width / 2.0f), 10},
-            1.5f, &WHITE, &(vec2f){5.0f, -5.0f}, &BLACK);
+            VEC2F((cpl_get_screen_width() / 2.0f) - (text_width / 2.0f), 10),
+            1.5f, WHITE, VEC2F(5.0f, -5.0f), BLACK);
     } else {
         ui_menu();
     }
@@ -547,13 +548,13 @@ void game_render() {
 
     if (restarting) {
         restart_anim();
-        cpl_draw_rect(&(vec2f){0.0f, 0.0f},
-                      &(vec2f){cpl_get_screen_width(), cpl_get_screen_height()},
-                      &(vec4f){255.0f, 255.0f, 255.0f, alpha}, 0.0f);
+        cpl_draw_rect(VEC2F_INIT(0.0f),
+                      VEC2F(cpl_get_screen_width(), cpl_get_screen_height()),
+                      RGBA(255.0f, 255.0f, 255.0f, alpha), 0.0f);
 
         if (restart_clock + 2.0f < cpl_get_time()) {
-            player.pos = (vec2f){cpl_get_screen_width() / 2.0f,
-                                 cpl_get_screen_height() / 2.0f};
+            player.pos = VEC2F(cpl_get_screen_width() / 2.0f,
+                               cpl_get_screen_height() / 2.0f);
             player.vel = 0.0f;
             score = 0;
             green_pipes_clear(&pipes);

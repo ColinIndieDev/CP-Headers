@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.31)
 
 # Name of executable
-project(CPHeaders)
+project(Bird)
 
 # C
 set(CMAKE_C_STANDARD 99)
@@ -117,7 +117,7 @@ endforeach()
 message(STATUS "============================================")
 
 add_executable(${CMAKE_PROJECT_NAME}
-    src/pendulum.c
+    src/bird.c
     ${SOURCE_FILES}
 )
 

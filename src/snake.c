@@ -9,6 +9,9 @@ VEC_DEF(vec2f, snake_body)
 #define WINDOW_WIDTH 60
 #define WINDOW_HEIGHT 20
 
+void reset_snake(snake_body *snake, vec2f *apple, vec2f *dir, i32 *score);
+b8 snake_body_collision(snake_body *s, vec2f *head);
+
 int main() {
     cplt_init(WINDOW_WIDTH, WINDOW_HEIGHT);
     cprng_rand_seed();
@@ -20,7 +23,9 @@ int main() {
     vec2f apple = {(f32)(cprng_rand_range(1, WINDOW_WIDTH - 1)),
                    (f32)(cprng_rand_range(1, WINDOW_HEIGHT - 3))};
 
-    snake_body_init(&snake, 3, (vec2f){cpm_floorf(WINDOW_WIDTH / 2.0f), cpm_floorf(WINDOW_HEIGHT / 2.0f)});
+    snake_body_init(&snake, 3,
+                    (vec2f){cpm_floorf(WINDOW_WIDTH / 2.0f),
+                            cpm_floorf(WINDOW_HEIGHT / 2.0f)});
 
     snake_body_at(&snake, 1)->x += 1;
     snake_body_at(&snake, 2)->x += 2;
@@ -53,17 +58,11 @@ int main() {
                 snake_body_back(&snake)->x < 1 ||
                 snake_body_back(&snake)->y > WINDOW_HEIGHT - 3 ||
                 snake_body_back(&snake)->y < 1) {
-                dir = (vec2f){1.0f, 0.0f};
-                while (snake.size > 3) {
-                    snake_body_pop_back(&snake);
-                }
-                *snake_body_at(&snake, 0) = (vec2f){cpm_floorf(WINDOW_WIDTH / 2.0f), cpm_floorf(WINDOW_HEIGHT / 2.0f)};
-                *snake_body_at(&snake, 1) = (vec2f){(cpm_floorf(WINDOW_WIDTH / 2.0f)) + 1, cpm_floorf(WINDOW_HEIGHT / 2.0f)};
-                *snake_body_at(&snake, 2) = (vec2f){(cpm_floorf(WINDOW_WIDTH / 2.0f) / 2) + 2, cpm_floorf(WINDOW_HEIGHT / 2.0f)};
+                reset_snake(&snake, &apple, &dir, &score);
+            }
 
-                apple = (vec2f){(f32)(cprng_rand_range(1, WINDOW_WIDTH - 2)),
-                                (f32)(cprng_rand_range(1, WINDOW_HEIGHT - 3))};
-                score = 0;
+            if (snake_body_collision(&snake, snake_body_front(&snake))) {
+                reset_snake(&snake, &apple, &dir, &score);
             }
         }
         if (cplt_is_key_pressed('q')) {
@@ -102,8 +101,7 @@ int main() {
         cplt_draw_text(0, WINDOW_HEIGHT - 1, fps_str, CYAN);
 
         i8 title[] = "SNAKE";
-        cplt_draw_text((WINDOW_WIDTH / 2) - 3, WINDOW_HEIGHT - 1,
-                       title, GREEN);
+        cplt_draw_text((WINDOW_WIDTH / 2) - 3, WINDOW_HEIGHT - 1, title, GREEN);
 
         i8 score_str[11];
         snprintf(score_str, 11, "Score: %d", score);
@@ -113,4 +111,31 @@ int main() {
         cplt_render();
     }
     snake_body_destroy(&snake);
+}
+
+b8 snake_body_collision(snake_body *s, vec2f *head) {
+    FOREACH_VEC(vec2f, snake_body, b, s) {
+        if (head == b) {
+            continue;
+        }
+        if (head->x == b->x && head->y == b->y) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void reset_snake(snake_body *snake, vec2f *apple, vec2f *dir, i32 *score) {
+    while (snake->size > 3) {
+        snake_body_pop_back(snake);
+    }
+    f32 cx = cpm_floorf(WINDOW_WIDTH / 2.0f);
+    f32 cy = cpm_floorf(WINDOW_HEIGHT / 2.0f);
+    *snake_body_at(snake, 0) = (vec2f){cx, cy};
+    *snake_body_at(snake, 1) = (vec2f){cx + 1, cy};
+    *snake_body_at(snake, 2) = (vec2f){cx + 2, cy};
+    *dir = (vec2f){1.0f, 0.0f};
+    *apple = (vec2f){(f32)cprng_rand_range(1, WINDOW_WIDTH - 2),
+                     (f32)cprng_rand_range(1, WINDOW_HEIGHT - 3)};
+    *score = 0;
 }
