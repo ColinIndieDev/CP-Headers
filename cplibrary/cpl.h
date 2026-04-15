@@ -175,7 +175,25 @@
 
 // }}}
 
+// {{{ OpenGL Versions
+
+#define OPENGL_VER_1_0 10
+#define OPENGL_VER_2_0 20
+#define OPENGL_VER_3_0 30
+#define OPENGL_VER_3_3 33
+#define OPENGL_VER_4_0 40
+#define OPENGL_VER_4_1 41
+#define OPENGL_VER_4_2 42
+#define OPENGL_VER_4_3 43
+#define OPENGL_VER_4_4 44
+#define OPENGL_VER_4_5 45
+#define OPENGL_VER_4_6 46
+
+// }}}
+
 // {{{ Colors
+
+typedef vec4f color;
 
 #define RGB(r, g, b) (vec4f){r, g, b, 255.0f}
 #define RGBA(r, g, b, a)                                                       \
@@ -212,6 +230,13 @@ u32 cpl_get_heap_used();
 u32 cpl_get_heap_free();
 u32 cpl_get_stack_size();
 u32 cpl_get_stack_used();
+
+GLenum cpl_check_gl_error(char *path, i32 line);
+void cpl_check_opengl_error();
+void APIENTRY cpl_gl_debug_out(GLenum src, GLenum type, u32 id, GLenum severity,
+                               GLsizei len, const char *msg,
+                               const void *usr_prog);
+void cpl_enable_opengl_debug();
 
 typedef struct {
     u32 id;
@@ -415,7 +440,7 @@ b8 cpl_check_collision_vec2f_circle(vec2f a, circle_collider *b);
 
 void cpl_framebuffer_size_callback(GLFWwindow *window, i32 width, i32 height);
 void cpl_init_shaders();
-void cpl_init_window(i32 width, i32 height, char *title);
+void cpl_init_window(i32 width, i32 height, char *title, i32 version);
 b8 cpl_window_should_close();
 void cpl_destroy_window();
 void cpl_close_window();
@@ -467,7 +492,6 @@ void cpl_display_details(font *font);
 
 // }}}
 
-#define CPL_IMPLEMENTATION
 #ifdef CPL_IMPLEMENTATION
 
 // {{{ Logging
@@ -616,6 +640,161 @@ u32 cpl_get_stack_used() {
 #else
     return 0;
 #endif
+}
+
+// }}}
+
+// {{{ OpenGL Debug
+
+GLenum cpl_check_gl_error(char *path, i32 line) {
+    GLenum errorCode;
+    while ((errorCode = glGetError()) != GL_NO_ERROR) {
+        char *error;
+        switch (errorCode) {
+        case GL_INVALID_ENUM:
+            error = "INVALID_ENUM";
+            break;
+        case GL_INVALID_VALUE:
+            error = "INVALID_VALUE";
+            break;
+        case GL_INVALID_OPERATION:
+            error = "INVALID_OPERATION";
+            break;
+        case GL_STACK_OVERFLOW:
+            error = "STACK_OVERFLOW";
+            break;
+        case GL_STACK_UNDERFLOW:
+            error = "STACK_UNDERFLOW";
+            break;
+        case GL_OUT_OF_MEMORY:
+            error = "OUT_OF_MEMORY";
+            break;
+        case GL_INVALID_FRAMEBUFFER_OPERATION:
+            error = "INVALID_FRAMEBUFFER_OPERATION";
+            break;
+        default:
+            error = "UNKNOWN";
+            break;
+        }
+        fprintf(stderr, "[CPL] [ERROR] %s | %s (%d)\n", error, path, line);
+    }
+    return errorCode;
+}
+
+void cpl_check_opengl_error() { cpl_check_gl_error(__FILE__, __LINE__); }
+
+void APIENTRY cpl_gl_debug_out(GLenum src, GLenum type, u32 id, GLenum severity,
+                               [[maybe_unused]] GLsizei len, const char *msg,
+                               [[maybe_unused]] const void *usr_prog) {
+    if (id == 131169 || id == 131185 || id == 131218 || id == 131204) {
+        return;
+    }
+
+    fprintf(stderr, "[CPL] [ERROR](%d) %s\n", id, msg);
+
+    fprintf(stderr, "->");
+    switch (src) {
+    case GL_DEBUG_SOURCE_API:
+        fprintf(stderr, "Source: API");
+        break;
+    case GL_DEBUG_SOURCE_WINDOW_SYSTEM:
+        fprintf(stderr, "Source: Window System");
+        break;
+    case GL_DEBUG_SOURCE_SHADER_COMPILER:
+        fprintf(stderr, "Source: Shader Compiler");
+        break;
+    case GL_DEBUG_SOURCE_THIRD_PARTY:
+        fprintf(stderr, "Source: Third Party");
+        break;
+    case GL_DEBUG_SOURCE_APPLICATION:
+        fprintf(stderr, "Source: Application");
+        break;
+    case GL_DEBUG_SOURCE_OTHER:
+        fprintf(stderr, "Source: Other");
+        break;
+    default:
+        fprintf(stderr, "Source: ???");
+        break;
+    }
+    fprintf(stderr, "\n");
+
+    fprintf(stderr, "->");
+    switch (type) {
+    case GL_DEBUG_TYPE_ERROR:
+        fprintf(stderr, "Type: Error");
+        break;
+    case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
+        fprintf(stderr, "Type: Deprecated Behaviour");
+        break;
+    case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
+        fprintf(stderr, "Type: Undefined Behaviour");
+        break;
+    case GL_DEBUG_TYPE_PORTABILITY:
+        fprintf(stderr, "Type: Portability");
+        break;
+    case GL_DEBUG_TYPE_PERFORMANCE:
+        fprintf(stderr, "Type: Performance");
+        break;
+    case GL_DEBUG_TYPE_MARKER:
+        fprintf(stderr, "Type: Marker");
+        break;
+    case GL_DEBUG_TYPE_PUSH_GROUP:
+        fprintf(stderr, "Type: Push Group");
+        break;
+    case GL_DEBUG_TYPE_POP_GROUP:
+        fprintf(stderr, "Type: Pop Group");
+        break;
+    case GL_DEBUG_TYPE_OTHER:
+        fprintf(stderr, "Type: Other");
+        break;
+    default:
+        fprintf(stderr, "Type: ???");
+        break;
+    }
+    fprintf(stderr, "\n");
+
+    fprintf(stderr, "->");
+    switch (severity) {
+    case GL_DEBUG_SEVERITY_HIGH:
+        fprintf(stderr, "Severity: HIGH");
+        break;
+    case GL_DEBUG_SEVERITY_MEDIUM:
+        fprintf(stderr, "Severity: MEDIUM");
+        break;
+    case GL_DEBUG_SEVERITY_LOW:
+        fprintf(stderr, "Severity: LOW");
+        break;
+    case GL_DEBUG_SEVERITY_NOTIFICATION:
+        fprintf(stderr, "Severity: NOTIFICTAION");
+        break;
+    default:
+        fprintf(stderr, "Severity: ???");
+    }
+    fprintf(stderr, "\n");
+    fprintf(stderr, "\n");
+}
+
+void cpl_enable_opengl_debug() {
+    i32 flags = 0;
+    glGetIntegerv(GL_CONTEXT_FLAGS, &flags);
+
+    if (flags & GL_CONTEXT_FLAG_DEBUG_BIT) {
+        GLint major = 0;
+        GLint minor = 0;
+        glGetIntegerv(GL_MAJOR_VERSION, &major);
+        glGetIntegerv(GL_MINOR_VERSION, &minor);
+        if (major < 4 || (major == 4 && minor < 3)) {
+            cpl_log(LOG_WARN, "OpenGL version is older than 4.3 - OpenGL debug "
+                              "output disabled!");
+            return;
+        }
+
+        glEnable(GL_DEBUG_OUTPUT);
+        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+        glDebugMessageCallback(cpl_gl_debug_out, NULLPTR);
+        glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0,
+                              NULLPTR, GL_TRUE);
+    }
 }
 
 // }}}
@@ -1653,12 +1832,16 @@ void cpl_init_shaders() {
 #endif
 }
 
-void cpl_init_window(i32 width, i32 height, char *title) {
+void cpl_init_window(i32 width, i32 height, char *title, i32 version) {
     glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, version / 10);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, version % 10);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#ifdef CPL_OPENGL_DEBUG
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, 1);
+#else
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, 0);
+#endif
 
 #ifdef __EMSCRIPTEN__
     double browser_w, browser_h;
@@ -1689,6 +1872,8 @@ void cpl_init_window(i32 width, i32 height, char *title) {
         exit(-1);
     }
 
+    cpl_enable_opengl_debug();
+
     cpl_cam_2D = (cam_2D){{0.0f, 0.0f}, 1.0f, 0.0f};
     mat4f_ortho(&cpl_projection_2D, 0.0f, cpl_screen_width, cpl_screen_height,
                 0.0f, -1.0f, 1.0f);
@@ -1717,7 +1902,7 @@ void cpl_close_window() { glfwTerminate(); }
 void cpl_clear_background(vec4f color) {
     glClearColor(color.r / 255.0f, color.g / 255.0f, color.b / 255.0f,
                  color.a / 255.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 }
 
 void cpl_begin_draw(cpl_draw_mode draw_mode, b8 mode_2D) {
@@ -1836,6 +2021,101 @@ void cpl_add_point_lights_2D(point_light_2D *ls, u32 size) {
     // TODO add for texture 2D extra version if texture_lit exists
 
     cpl_reset_shader();
+}
+
+// }}}
+
+// {{{ Shadow 2D
+
+void cpl_begin_shadow_cast_2D() {
+    glEnable(GL_STENCIL_TEST);
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glStencilFunc(GL_ALWAYS, 1, 0xFF);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+    cpl_begin_draw(CPL_SHAPE_2D_UNLIT, true);
+}
+
+void cpl_end_shadow_cast_2D(f32 ambient, f32 shadow_strength,
+                            color shadow_color) {
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glStencilFunc(GL_EQUAL, 1, 0xFF);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+    f32 shadow_alpha = CPM_CLAMP(shadow_strength - ambient, 0, 1);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    cpl_begin_draw(CPL_SHAPE_2D_UNLIT, false);
+    cpl_draw_rect(VEC2F_INIT(0), cpl_get_screen_size(),
+                  RGBA(shadow_color.r, shadow_color.g, shadow_color.b,
+                       255 * shadow_alpha),
+                  0);
+    glDisable(GL_STENCIL_TEST);
+}
+
+void cpl_draw_triangle_shadow(vec2f a, vec2f b, vec2f c) {
+    f32 vertices[9] = {
+        a.x, a.y, 0.0f, b.x, b.y, 0.0f, c.x, c.y, 0.0f,
+    };
+    u32 vao;
+    u32 vbo;
+    glGenVertexArrays(1, &vao);
+    glGenBuffers(1, &vbo);
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(f32),
+                          (void *)NULL);
+    glEnableVertexAttribArray(0);
+    mat4f transform;
+    mat4f_identity(&transform);
+    cpl_shader_set_mat4f(&cpl_shaders[CPL_SHAPE_2D_UNLIT], "transform",
+                         transform);
+    cpl_shader_set_rgba(&cpl_shaders[CPL_SHAPE_2D_UNLIT], "input_color",
+                        &(vec4f){0.0f, 0.0f, 0.0f, 1.0f});
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glDeleteVertexArrays(1, &vao);
+    glDeleteBuffers(1, &vbo);
+}
+
+void cpl_draw_rect_shadow(vec2f pos, vec2f size, point_light_2D *lights, u32 n,
+                          f32 far) {
+    vec2f corners[4] = {
+        {pos.x, pos.y},
+        {pos.x + size.x, pos.y},
+        {pos.x + size.x, pos.y + size.y},
+        {pos.x, pos.y + size.y},
+    };
+    vec2f normals[4] = {
+        {0, -1},
+        {1, 0},
+        {0, 1},
+        {-1, 0},
+    };
+    for (u32 l = 0; l < n; l++) {
+        for (u32 i = 0; i < 4; i++) {
+            u32 next = (i + 1) % 4;
+            vec2f a = corners[i];
+            vec2f b = corners[next];
+            vec2f mid = {(a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f};
+            vec2f to_edge = {mid.x - lights[l].pos.x, mid.y - lights[l].pos.y};
+            f32 d = (normals[i].x * to_edge.x) + (normals[i].y * to_edge.y);
+            if (d <= 0) {
+                continue;
+            }
+            vec2f dir_a = {a.x - lights[l].pos.x, a.y - lights[l].pos.y};
+            f32 len_a = cpm_sqrt((dir_a.x * dir_a.x) + (dir_a.y * dir_a.y));
+            dir_a.x /= len_a;
+            dir_a.y /= len_a;
+            vec2f dir_b = {b.x - lights[l].pos.x, b.y - lights[l].pos.y};
+            f32 len_b = cpm_sqrt((dir_b.x * dir_b.x) + (dir_b.y * dir_b.y));
+            dir_b.x /= len_b;
+            dir_b.y /= len_b;
+            vec2f a2 = {a.x + (dir_a.x * far), a.y + (dir_a.y * far)};
+            vec2f b2 = {b.x + (dir_b.x * far), b.y + (dir_b.y * far)};
+            cpl_draw_triangle_shadow(a, b, b2);
+            cpl_draw_triangle_shadow(a, b2, a2);
+        }
+    }
 }
 
 // }}}

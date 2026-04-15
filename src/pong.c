@@ -22,7 +22,7 @@ void update(player *p1, player *p2, ball *pong, f32 player_width,
 void render(player p1, player p2, ball pong, font *font, texture *tex);
 
 int main() {
-    cpl_init_window(800, 600, "Hello CPL");
+    cpl_init_window(800, 600, "Hello CPL", OPENGL_VER_3_3);
     cpl_enable_vsync(false);
 
     cprng_rand_seed();
@@ -130,7 +130,7 @@ void update(player *p1, player *p2, ball *pong, f32 player_width,
 }
 
 void render(player p1, player p2, ball pong, font *font, texture *tex) {
-    cpl_clear_background(&BLACK);
+    cpl_clear_background(BLACK);
 
     cpl_begin_draw(CPL_SHAPE_2D_LIT, false);
 
@@ -143,19 +143,19 @@ void render(player p1, player p2, ball pong, font *font, texture *tex) {
     cpl_add_point_lights_2D(point_l, 1);
 
     // Redundant because not affected by light 2D
-    cpl_draw_rect(&(vec2f){0.0f, 0.0f},
-                  &(vec2f){cpl_get_screen_width(), cpl_get_screen_height()},
-                  &BLACK, 0.0f);
+    cpl_draw_rect((vec2f){0.0f, 0.0f},
+                  (vec2f){cpl_get_screen_width(), cpl_get_screen_height()},
+                  BLACK, 0.0f);
 
     cpl_draw_line(
-        &(vec2f){cpl_get_screen_width() / 2.0f, 0.0f},
-        &(vec2f){cpl_get_screen_width() / 2.0f, cpl_get_screen_height()}, 3.0f,
-        &WHITE);
+        (vec2f){cpl_get_screen_width() / 2.0f, 0.0f},
+        (vec2f){cpl_get_screen_width() / 2.0f, cpl_get_screen_height()}, 3.0f,
+        WHITE);
 
-    cpl_draw_rect(&p1.p, &p1.s, &BLUE, 0.0f);
-    cpl_draw_rect(&p2.p, &p2.s, &RED, 0.0f);
+    cpl_draw_rect(p1.p, p1.s, BLUE, 0.0f);
+    cpl_draw_rect(p2.p, p2.s, RED, 0.0f);
 
-    cpl_draw_circle(&pong.p, pong.r, &WHITE);
+    cpl_draw_circle(pong.p, pong.r, WHITE);
 
     cpl_begin_draw(CPL_TEXT, false);
 
@@ -167,9 +167,9 @@ void render(player p1, player p2, ball pong, font *font, texture *tex) {
         cpl_get_text_size(font, p1_score, score_font_size);
     cpl_draw_text(
         font, p1_score,
-        &(vec2f){(cpl_get_screen_width() * 0.25f) - p1_score_text_size.x,
+        (vec2f){(cpl_get_screen_width() * 0.25f) - p1_score_text_size.x,
                  cpl_get_screen_height() - p1_score_text_size.y - 10.0f},
-        score_font_size, &WHITE);
+        score_font_size, WHITE);
 
     char p2_score[10];
     snprintf(p2_score, 10, "%d", p2.score);
@@ -177,17 +177,17 @@ void render(player p1, player p2, ball pong, font *font, texture *tex) {
         cpl_get_text_size(font, p2_score, score_font_size);
     cpl_draw_text(
         font, p2_score,
-        &(vec2f){(cpl_get_screen_width() * 0.75f) - p2_score_text_size.x,
+        (vec2f){(cpl_get_screen_width() * 0.75f) - p2_score_text_size.x,
                  cpl_get_screen_height() - p2_score_text_size.y - 10.0f},
-        score_font_size, &WHITE);
+        score_font_size, WHITE);
 
     cpl_display_details(font);
 
     cpl_begin_draw(CPL_TEXTURE_2D_UNLIT, false);
 
-    cpl_draw_texture2D(tex, &(vec2f){0.0f, 0.0f},
-                       &(vec2f){tex->size.x / 10.0f, tex->size.y / 10.0f},
-                       &WHITE, 0.0f);
+    cpl_draw_texture2D(tex, (vec2f){0.0f, 0.0f},
+                       (vec2f){tex->size.x / 10.0f, tex->size.y / 10.0f},
+                       WHITE, 0.0f);
 
     cpl_end_frame();
 }

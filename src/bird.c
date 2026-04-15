@@ -334,8 +334,10 @@ void main_loop() {
     game_render();
 }
 
+#define CPL_OPENGL_DEBUG
+
 int main() {
-    cpl_init_window(800, 600, "Flappy Bird Clone");
+    cpl_init_window(800, 600, "Flappy Bird Clone", OPENGL_VER_4_3);
     cpl_enable_vsync(false);
     cpl_audio_init();
     game_init();
@@ -347,6 +349,8 @@ int main() {
 #else
     while (!cpl_window_should_close()) {
         main_loop();
+        i32 vao = -232319; 
+        glBindVertexArray(vao);
     }
     save_highscore();
 #endif

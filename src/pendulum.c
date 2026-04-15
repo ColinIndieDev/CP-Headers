@@ -46,7 +46,7 @@ texture spring;
 texture ball;
 
 int main(void) {
-    cpl_init_window(800, 800, "Pendulum Simulation");
+    cpl_init_window(800, 800, "Pendulum Simulation", OPENGL_VER_3_3);
     cpl_enable_vsync(false);
 
     x = origin;

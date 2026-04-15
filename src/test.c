@@ -1,171 +1,79 @@
-#include "../cpstd/cpbitarr.h"
-#include "../cpstd/cphash.h"
-#include "../cpstd/cplist.h"
-#include "../cpstd/cpmemory.h"
-#include "../cpstd/cpqueue.h"
-#include "../cpstd/cparr.h"
-#include "../cpstd/cpsort.h"
+#define CPL_IMPLEMENTATION
+#include "../cplibrary/cpl.h"
 
-#include "../cpstd/cprng.h"
+void handle_movement() {
+    f32 speed = 100.0f;
 
-#include <stdio.h>
-#include <time.h>
-
-ARR_DEF(f32, arr_f32)
-VEC_DEF(i32, vec_i32)
-HASHMAP_DEF(u8, f32, map)
-HASHSET_DEF(u8, set)
-QUEUE_DEF(i32, queue)
-PRIORITY_QUEUE_DEF(i32, priority_queue)
-LINKED_LIST_DEF(const i8 *, ll_str)
-
-SORT_ALGORITHM_DEF(i32, integers)
-
-int main() {
-    for (int i = 0; i < 5; i++) {
-        int *val = cp_malloc(sizeof(int));
-
-        *val = 1092;
-
-        printf("%p: %d\n", val, *val);
-        cp_free(val);
+    if (cpl_is_key_down(CPL_KEY_W)) {
+        cpl_cam_2D.pos.y -= speed * cpl_get_dt() * (1.0f / cpl_cam_2D.zoom);
+    }
+    if (cpl_is_key_down(CPL_KEY_S)) {
+        cpl_cam_2D.pos.y += speed * cpl_get_dt() * (1.0f / cpl_cam_2D.zoom);
+    }
+    if (cpl_is_key_down(CPL_KEY_A)) {
+        cpl_cam_2D.pos.x -= speed * cpl_get_dt() * (1.0f / cpl_cam_2D.zoom);
+    }
+    if (cpl_is_key_down(CPL_KEY_D)) {
+        cpl_cam_2D.pos.x += speed * cpl_get_dt() * (1.0f / cpl_cam_2D.zoom);
+    }
+    if (cpl_is_key_down(CPL_KEY_ESCAPE)) {
+        cpl_destroy_window();
     }
 
-    map m;
-    map_init(&m, 3);
-
-    map_put(&m, 'a', 197.0f);
-    map_put(&m, 'z', 82.0f);
-    map_put(&m, 'c', 996.198f);
-    map_put(&m, 'b', 6.5f);
-    map_put(&m, 'p', 8.278f);
-
-    map_remove(&m, 'c');
-
-    FOREACH_HM(map, entry, &m) {
-        if (entry->state == HASH_OCCUPIED) {
-            printf("%c: %f\n", entry->key, entry->value);
-        }
+    if (cpl_is_key_down(CPL_KEY_H)) {
+        cpl_cam_2D.zoom += 2 * cpl_get_dt();
     }
-
-    map_destroy(&m);
-
-    set s;
-    set_init(&s, 3);
-
-    set_put(&s, 'a');
-    set_put(&s, 'z');
-    set_put(&s, 'c');
-    set_put(&s, 'b');
-    set_put(&s, 'p');
-
-    set_remove(&s, 'c');
-
-    FOREACH_HS(set, entry, &s) {
-        if (entry->state == HASH_OCCUPIED) {
-            printf("%c\n", entry->key);
-        }
+    if (cpl_is_key_down(CPL_KEY_N)) {
+        cpl_cam_2D.zoom -= 2 * cpl_get_dt();
     }
+    cpl_cam_2D.zoom = CPM_CLAMP(cpl_cam_2D.zoom, 0.1f, 10);
+}
 
-    for (int i = 'a'; i < ('z' + 1); i++) {
-        if (set_contains(&s, i)) {
-            printf("Found key: %c!\n", i);
-        }
+MAIN_PROG main(void) {
+    cpl_init_window(800, 800, "Hello CPL", 33);
+
+    f32 ambient_intensity = 0.1f;
+
+    while (!cpl_window_should_close()) {
+        cpl_update();
+
+        handle_movement();
+
+        cpl_clear_background(BLACK);
+
+        cpl_begin_draw(CPL_SHAPE_2D_LIT, true);
+
+        cpl_set_ambient_light_2D(ambient_intensity);
+
+        point_light_2D light[] = {
+            {.pos = VEC2F_INIT(0),
+             .intensity = 1,
+             .color = WHITE,
+             .radius = 500},
+            {.pos = cpl_get_screen_to_world_2D(cpl_get_mouse_pos()),
+             .intensity = 1,
+             .color = WHITE,
+             .radius = 500},
+        };
+
+        cpl_add_point_lights_2D(light, sizeof(light) / sizeof(point_light_2D));
+
+        cpl_draw_rect(cpl_cam_2D.pos, cpl_get_screen_size(), WHITE, 0);
+
+        cpl_draw_rect(VEC2F(300, 300), VEC2F_INIT(100), RED, 0);
+
+        cpl_draw_rect(VEC2F(400, 400), VEC2F_INIT(300), BLUE, 0);
+
+        cpl_begin_shadow_cast_2D();
+
+        cpl_draw_rect_shadow(VEC2F(300, 300), VEC2F_INIT(100), light,
+                             sizeof(light) / sizeof(point_light_2D), 2000);
+        cpl_draw_rect_shadow(VEC2F(400, 400), VEC2F_INIT(300), light,
+                             sizeof(light) / sizeof(point_light_2D), 2000);
+
+        cpl_end_shadow_cast_2D(ambient_intensity, 0.5f, RGB(0, 0, 0));
+
+        cpl_end_frame();
     }
-    
-    // TODO set_destroy or everything else below except set_destroy lead to segfault
-    set_destroy(&s);
-
-    priority_queue q;
-    priority_queue_init(&q, 1);
-
-    priority_queue_push(&q, 6, 6);
-    priority_queue_push(&q, 11, 11);
-    priority_queue_push(&q, -2, -2);
-    priority_queue_push(&q, 7, 7);
-    priority_queue_push(&q, 4, 4);
-
-    printf("priority queue: ");
-    while (!priority_queue_empty(&q)) {
-        i32 val = 0;
-        priority_queue_pop(&q, &val);
-        printf("%d ", val);
-    }
-    printf("\n");
-
-    priority_queue_destroy(&q);
-
-    bit_arr ba;
-    bit_arr_init(&ba, 10);
-
-    bit_arr_set(&ba, 0);
-    bit_arr_set(&ba, 3);
-    bit_arr_set(&ba, 5);
-    bit_arr_set(&ba, 7);
-    bit_arr_set(&ba, 8);
-
-    bit_arr_clear(&ba, 1);
-    bit_arr_clear(&ba, 5);
-
-    printf("bit array: ");
-    for (u32 i = 0; i < ba.bits; i++) {
-        printf("%d", bit_arr_get(&ba, i));
-    }
-    printf("\n");
-
-    bit_arr_destroy(&ba);
-
-    ll_str friends;
-    ll_str_reserve(&friends, 10);
-    ll_str_add(&friends, "Joe");
-    ll_str_add(&friends, "Kathrina");
-    ll_str_add(&friends, "Tom");
-    ll_str_add(&friends, "Klaus");
-    ll_str_add(&friends, "Hannah");
-    ll_str_add(&friends, "Jimmy");
-
-    ll_str_pop(&friends, 5);
-    ll_str_pop(&friends, 4);
-
-    ll_str_node *f = ll_str_get(&friends, 0);
-    while (f != NULL) {
-        printf("%s ", f->val);
-        f = f->next;
-    }
-    printf("\n");
-
-    ll_str_destroy(&friends);
-
-    vec_i32 v1;
-    vec_i32 v2;
-
-    vec_i32_init(&v1, 10, 0);
-    vec_i32_init(&v2, 0, 0);
-
-    for (int i = 0; i < v1.size; i++) {
-        *vec_i32_at(&v1, i) = i;
-    }
-
-    vec_i32_copy(&v1, &v2);
-
-    FOREACH_VEC(int, vec_i32, it, &v2) { printf("%d", *it); }
-
-    cprng_rand_seed();
-
-    vec_i32 v;
-
-    vec_i32_reserve(&v, 1000);
-    for (u32 i = 0; i < 1000; i++) {
-        vec_i32_push_back(&v, cprng_rand_range(0, 100000));
-    }
-
-    clock_t start = clock();
-    integers_sort(v.data, (i32)v.size);
-
-    f64 elapsed = (f64)(clock() - start) / CLOCKS_PER_SEC;
-
-    printf("\nTook %.1fms!\n", elapsed * 1000000);
-    FOREACH_VEC(i32, vec_i32, it, &v) { printf("%d ", *it); }
-
-    EXIT(PROG_SUCCESS);
+    cpl_close_window();
 }

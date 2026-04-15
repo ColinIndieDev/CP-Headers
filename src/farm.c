@@ -36,7 +36,7 @@ f32 money_balance = 5.0f;
 f32 property_size = 10;
 
 MAIN_PROG main(void) {
-    cpl_init_window(800, 800, "Pendulum Simulation");
+    cpl_init_window(800, 800, "Pendulum Simulation", OPENGL_VER_3_3);
     cpl_enable_vsync(false);
 
     init();
