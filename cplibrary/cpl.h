@@ -2202,7 +2202,7 @@ void cpl_tilemap_delete_tile(tilemap *m, vec2f pos) {
 }
 
 b8 cpl_tilemap_tile_exists(tilemap *m, vec2f pos) {
-    for (u32 i = 0; i < m->renderer.count; i++) {
+    for (u32 i = 0; i < m->renderer.count; i += 6) {
         if (m->renderer.vertices->x == pos.x &&
             m->renderer.vertices->y == pos.y) {
             return true;
